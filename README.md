@@ -7,7 +7,7 @@ Scaffolds a Markdown-based project memory into any codebase. Works with Claude C
 ## Quick Start
 
 ```bash
-npx memoc init
+npx @kevin0181/memoc init
 ```
 
 Run inside your project directory. Detects your stack automatically and generates everything agents need.
@@ -26,29 +26,29 @@ memoc installs a memory structure that agents read at session start, update as t
 
 ```bash
 # First-time setup — scaffold memory, detect stack, install Claude Code hook
-npx memoc init
+npx @kevin0181/memoc init
 
 # Re-scan project and refresh managed sections
-npx memoc update
+npx @kevin0181/memoc update
 
 # Print current status in ~10 lines
-npx memoc summary
+npx @kevin0181/memoc summary
 
 # Find relevant files before opening them (token-efficient)
-npx memoc search "auth"
-npx memoc search "auth" --snippets --limit 5
+npx @kevin0181/memoc search "auth"
+npx @kevin0181/memoc search "auth" --snippets --limit 5
 
 # Estimate token cost of current memory files
-npx memoc tokens
+npx @kevin0181/memoc tokens
 
 # Archive old log entries to keep log.md small
-npx memoc compress
+npx @kevin0181/memoc compress
 
 # Add the same protocol to another agent's entry file
-npx memoc add cursor
-npx memoc add windsurf
-npx memoc add copilot
-npx memoc add gemini
+npx @kevin0181/memoc add cursor
+npx @kevin0181/memoc add windsurf
+npx @kevin0181/memoc add copilot
+npx @kevin0181/memoc add gemini
 ```
 
 ---
