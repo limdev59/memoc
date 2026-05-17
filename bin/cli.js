@@ -208,16 +208,16 @@ function write(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
-function tplMemocCmdWrapper() {
-  return `@echo off\r\nnpm exec --yes --package "@kevin0181/memoc" -- memoc %*\r\n`;
+function tplMemocCmdWrapper(cliPath = runtimeCliPath()) {
+  return `@echo off\r\nnode "${escapeCmdPath(cliPath)}" %*\r\n`;
 }
 
-function tplMemocPs1Wrapper() {
-  return `npm exec --yes --package '@kevin0181/memoc' -- memoc @args\nexit $LASTEXITCODE\n`;
+function tplMemocPs1Wrapper(cliPath = runtimeCliPath()) {
+  return `& node ${psSingleQuote(cliPath)} @args\nexit $LASTEXITCODE\n`;
 }
 
-function tplMemocShWrapper() {
-  return `#!/bin/sh\nexec npm exec --yes --package '@kevin0181/memoc' -- memoc "$@"\n`;
+function tplMemocShWrapper(cliPath = runtimeCliPath()) {
+  return `#!/bin/sh\nexec node ${shellSingleQuote(cliPath)} "$@"\n`;
 }
 
 function defaultUserBinDir() {
@@ -226,6 +226,18 @@ function defaultUserBinDir() {
     return path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'bin');
   }
   return path.join(process.env.HOME || process.cwd(), '.local', 'bin');
+}
+
+function defaultRuntimeDir() {
+  if (process.env.MEMOC_RUNTIME_DIR) return process.env.MEMOC_RUNTIME_DIR;
+  if (currentPlatform() === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'runtime');
+  }
+  return path.join(process.env.HOME || process.cwd(), '.local', 'share', 'memoc', 'runtime');
+}
+
+function runtimeCliPath() {
+  return path.join(defaultRuntimeDir(), 'bin', 'cli.js');
 }
 
 function tplEnvPs1() {
@@ -237,10 +249,11 @@ function tplEnvSh() {
 }
 
 function ensurePathHelpers(dir, mark) {
+  const cliPath = ensureRuntimeInstall(mark);
   const files = [
-    [path.join(dir, '.memoc', 'bin', 'memoc.cmd'), tplMemocCmdWrapper, false],
-    [path.join(dir, '.memoc', 'bin', 'memoc.ps1'), tplMemocPs1Wrapper, false],
-    [path.join(dir, '.memoc', 'bin', 'memoc'), tplMemocShWrapper, true],
+    [path.join(dir, '.memoc', 'bin', 'memoc.cmd'), () => tplMemocCmdWrapper(cliPath), false],
+    [path.join(dir, '.memoc', 'bin', 'memoc.ps1'), () => tplMemocPs1Wrapper(cliPath), false],
+    [path.join(dir, '.memoc', 'bin', 'memoc'), () => tplMemocShWrapper(cliPath), true],
     [path.join(dir, '.memoc', 'env.ps1'), tplEnvPs1, false],
     [path.join(dir, '.memoc', 'env.sh'), tplEnvSh, true],
   ];
@@ -255,15 +268,15 @@ function ensurePathHelpers(dir, mark) {
 
 function ensureUserLauncher(mark) {
   const userBin = defaultUserBinDir();
-  writeLaunchers(userBin, mark, 'user bin');
+  writeLaunchers(userBin, mark, 'user bin', ensureRuntimeInstall(mark));
   return userBin;
 }
 
-function writeLaunchers(binDir, mark, label) {
+function writeLaunchers(binDir, mark, label, cliPath = ensureRuntimeInstall(mark)) {
   const files = [
-    [path.join(binDir, 'memoc.cmd'), tplMemocCmdWrapper, false],
-    [path.join(binDir, 'memoc.ps1'), tplMemocPs1Wrapper, false],
-    [path.join(binDir, 'memoc'), tplMemocShWrapper, true],
+    [path.join(binDir, 'memoc.cmd'), () => tplMemocCmdWrapper(cliPath), false],
+    [path.join(binDir, 'memoc.ps1'), () => tplMemocPs1Wrapper(cliPath), false],
+    [path.join(binDir, 'memoc'), () => tplMemocShWrapper(cliPath), true],
   ];
 
   for (const [fp, tpl, executable] of files) {
@@ -341,8 +354,30 @@ function ensureCurrentPathLauncher(mark) {
     mark('skip', 'active PATH launcher (no writable PATH directory found)');
     return false;
   }
-  writeLaunchers(target, mark, 'active PATH');
+  writeLaunchers(target, mark, 'active PATH', ensureRuntimeInstall(mark));
   return true;
+}
+
+function ensureRuntimeInstall(mark) {
+  const runtimeDir = defaultRuntimeDir();
+  const sourceRoot = path.join(__dirname, '..');
+  const files = [
+    [path.join(sourceRoot, 'bin', 'cli.js'), path.join(runtimeDir, 'bin', 'cli.js')],
+    [path.join(sourceRoot, 'package.json'), path.join(runtimeDir, 'package.json')],
+  ];
+
+  for (const [src, dest] of files) {
+    try {
+      const content = fs.readFileSync(src, 'utf8');
+      const changed = writeIfChanged(dest, content);
+      mark(changed, `runtime ${path.relative(runtimeDir, dest)}`);
+    } catch {
+      mark('skip', `runtime ${path.basename(dest)} unavailable`);
+    }
+  }
+
+  chmodExecutable(path.join(runtimeDir, 'bin', 'cli.js'));
+  return path.join(runtimeDir, 'bin', 'cli.js');
 }
 
 function findWritablePathDir() {
@@ -445,6 +480,14 @@ function currentPlatform() {
 
 function shellSingleQuote(value) {
   return `'${String(value).replace(/'/g, `'\\''`)}'`;
+}
+
+function psSingleQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
+function escapeCmdPath(value) {
+  return String(value).replace(/"/g, '""');
 }
 
 function samePath(a, b) {
