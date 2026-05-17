@@ -16,7 +16,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/neneee0181/memoc.git"
+    "url": "git+https://github.com/neneee0181/memoc.git"
   },
   "homepage": "https://github.com/neneee0181/memoc#readme",
   "bugs": {
