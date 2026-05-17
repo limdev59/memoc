@@ -20,9 +20,14 @@ function withTempProject(fn) {
 
 test('init creates PATH helpers and teaches agents command fallbacks', () => {
   withTempProject(dir => {
-    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8' });
+    const output = execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: { ...process.env, MEMOC_SKIP_PATH_REGISTER: '1' },
+    });
 
     const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+    assert.match(output, /PATH registration/);
     assert.match(agents, /Run memoc commands in this order/);
     assert.match(agents, /`memoc search "<query>"`/);
     assert.match(agents, /`\.\\\.memoc\\bin\\memoc\.cmd search "<query>"`/);

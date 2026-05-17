@@ -245,6 +245,60 @@ function ensurePathHelpers(dir, mark) {
   }
 }
 
+function ensurePathRegistration(dir, mark) {
+  const binDir = path.join(dir, '.memoc', 'bin');
+  const pathSep = path.delimiter;
+
+  if ((process.env.PATH || '').split(pathSep).some(p => samePath(p, binDir))) {
+    mark('skip', 'PATH (.memoc/bin already active)');
+    return;
+  }
+
+  process.env.PATH = `${binDir}${pathSep}${process.env.PATH || ''}`;
+
+  if (process.env.MEMOC_SKIP_PATH_REGISTER === '1') {
+    mark('skip', 'PATH registration (test mode)');
+    return;
+  }
+
+  if (process.platform !== 'win32') {
+    mark('skip', 'PATH registration (source .memoc/env.sh for this shell)');
+    return;
+  }
+
+  try {
+    const current = require('child_process')
+      .execFileSync('powershell.exe', [
+        '-NoProfile',
+        '-ExecutionPolicy', 'Bypass',
+        '-Command',
+        "[Environment]::GetEnvironmentVariable('Path','User')",
+      ], { encoding: 'utf8' })
+      .trim();
+    const parts = current.split(pathSep).filter(Boolean);
+    if (parts.some(p => samePath(p, binDir))) {
+      mark('skip', 'User PATH (.memoc/bin already registered)');
+      return;
+    }
+    const nextPath = [binDir, ...parts].join(pathSep);
+    require('child_process').execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-ExecutionPolicy', 'Bypass',
+      '-Command',
+      `[Environment]::SetEnvironmentVariable('Path', ${JSON.stringify(nextPath)}, 'User')`,
+    ], { stdio: 'ignore' });
+    mark('update', 'User PATH (.memoc/bin added; open a new terminal if needed)');
+  } catch {
+    mark('skip', 'User PATH registration failed (use . .\\.memoc\\env.ps1)');
+  }
+}
+
+function samePath(a, b) {
+  if (!a || !b) return false;
+  const norm = p => path.resolve(p).toLowerCase().replace(/[\\/]+$/, '');
+  try { return norm(a) === norm(b); } catch { return false; }
+}
+
 function updateSection(filePath, startMark, endMark, inner) {
   if (!fs.existsSync(filePath)) return false;
   const src = fs.readFileSync(filePath, 'utf8');
@@ -1074,6 +1128,7 @@ function run(dir, forceUpdate) {
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensurePathHelpers(dir, mark);
+    ensurePathRegistration(dir, mark);
 
   } else {
     // ── UPDATE MODE
@@ -1166,6 +1221,7 @@ function run(dir, forceUpdate) {
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensurePathHelpers(dir, mark);
+    ensurePathRegistration(dir, mark);
 
     // Append update record to log.md
     const logPath = path.join(memDir, 'log.md');
