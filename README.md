@@ -46,9 +46,13 @@ npx @kevin0181/memoc update
 # Print current status in ~10 lines
 npx @kevin0181/memoc summary
 
-# Find relevant project files before opening them (token-efficient)
+# Search memory/agent docs first (token-efficient)
 npx @kevin0181/memoc search "auth"
 npx @kevin0181/memoc search "auth" --snippets --limit 5
+
+# Search project source/text files only when memory is not enough
+npx @kevin0181/memoc grep "GetParticles"
+npx @kevin0181/memoc grep "GetParticles" --snippets --limit 5
 
 # Estimate token cost of current memory files
 npx @kevin0181/memoc tokens

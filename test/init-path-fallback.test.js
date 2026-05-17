@@ -86,7 +86,7 @@ test('init registers a user-local memoc launcher for unix shells', () => {
   });
 });
 
-test('search finds source code matches, not only memory files', () => {
+test('search stays memory-scoped while grep finds source code matches', () => {
   withTempProject(dir => {
     const srcDir = path.join(dir, 'src');
     fs.mkdirSync(srcDir, { recursive: true });
@@ -95,13 +95,21 @@ test('search finds source code matches, not only memory files', () => {
       'void GetParticles() { /* renderer shader */ }\n',
       'utf8'
     );
+    fs.mkdirSync(path.join(dir, '.memoc'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.memoc', 'session-summary.md'), '- GetParticles memory note\n', 'utf8');
 
-    const output = execFileSync(process.execPath, [cliPath, 'search', 'GetParticles', '--snippets', '--limit', '5'], {
+    const memoryOutput = execFileSync(process.execPath, [cliPath, 'search', 'GetParticles', '--snippets', '--limit', '5'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+    const projectOutput = execFileSync(process.execPath, [cliPath, 'grep', 'GetParticles', '--snippets', '--limit', '5'], {
       cwd: dir,
       encoding: 'utf8',
     });
 
-    assert.match(output, /src[\\/]particles\.cpp:1/);
-    assert.match(output, /GetParticles/);
+    assert.match(memoryOutput, /\.memoc[\\/]session-summary\.md:1/);
+    assert.doesNotMatch(memoryOutput, /src[\\/]particles\.cpp/);
+    assert.match(projectOutput, /src[\\/]particles\.cpp:1/);
+    assert.match(projectOutput, /GetParticles/);
   });
 });

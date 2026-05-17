@@ -546,7 +546,8 @@ function managedBlock() {
 ## Before Opening More Files
 - [ ] Run memoc commands in this order: \`memoc search "<query>"\` → \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` (Windows) or \`.memoc/bin/memoc search "<query>"\` (sh) → \`npx @kevin0181/memoc search "<query>"\`
 - [ ] Open on demand: \`02\` status · \`04\` resume · \`06\` rules · \`llms.txt\` map
-- [ ] Keep output small: \`summary\`, \`search --limit\`, \`search --snippets\`
+- [ ] If memory search is not enough, search project files with \`memoc grep "<query>" --limit 5\`
+- [ ] Keep output small: \`summary\`, \`search --limit\`, \`grep --limit\`, \`--snippets\`
 
 ## Before Finishing _(update only applicable files; skip Q&A / throwaway exploration)_
 - [ ] Code/config/deps changed → \`02\` (version, commands list, Last synced) + \`session-summary.md\` (status, changed, open tasks)
@@ -859,7 +860,8 @@ On-demand reference only. The entry-file managed block is authoritative.
 
 ## Search First
 
-\`memoc search "<query>"\` — returns file:line matches across all memory files.
+\`memoc search "<query>"\` — returns file:line matches across memory and agent docs only.
+\`memoc grep "<query>"\` — searches project source/text files when memory docs are not enough.
 If \`memoc\` is not on PATH, try \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` on Windows or \`.memoc/bin/memoc search "<query>"\` in sh, then \`npx @kevin0181/memoc search "<query>"\`.
 Use it before opening any file to avoid reading more than needed.
 `;
@@ -1039,9 +1041,13 @@ memoc update
 # Tiny status overview
 memoc summary
 
-# Find files first; add --snippets only when needed
+# Search memory first; add --snippets only when needed
 memoc search "<query>" --limit 12
 memoc search "<query>" --snippets --limit 5
+
+# Search project source/text files when memory is not enough
+memoc grep "<query>" --limit 12
+memoc grep "<query>" --snippets --limit 5
 \`\`\`
 
 If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh. If that is unavailable, use \`npx @kevin0181/memoc <command>\`.
@@ -1050,9 +1056,9 @@ If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Wind
 
 1. Entry-file managed block.
 2. \`.memoc/session-summary.md\` only.
-3. Search in this order: \`memoc search "<query>"\`, \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` or \`.memoc/bin/memoc search "<query>"\`, \`npx @kevin0181/memoc search "<query>"\`.
-4. Use \`--snippets\` only when file names are not enough.
-5. Open only task-relevant memory files.
+3. Search memory first: \`memoc search "<query>"\`.
+4. If memory is not enough, search project files: \`memoc grep "<query>" --limit 5\`.
+5. Use \`--snippets\` only when file names are not enough.
 
 ## When To Run Memory Updates
 
@@ -1146,7 +1152,7 @@ Use this local skill after meaningful project work so future agents can continue
 ## Required Reads
 
 1. \`.memoc/session-summary.md\`
-2. \`memoc summary\` or \`memoc search "<query>"\`; if unavailable, use \`.\\.memoc\\bin\\memoc.cmd <command>\` or \`.memoc/bin/memoc <command>\`, then \`npx @kevin0181/memoc <command>\`
+2. \`memoc summary\` or \`memoc search "<query>"\`; use \`memoc grep "<query>"\` only when source/text search is needed
 3. Open only files you will use or update.
 
 ## Maintenance Checklist
@@ -1470,7 +1476,7 @@ function runAdd(dir) {
 // SEARCH
 // ═══════════════════════════════════════════════════════════════════
 
-function runSearch(dir) {
+function runSearch(dir, scope = 'memory') {
   const rawArgs = process.argv.slice(3);
   const opts = { mode: 'files', limit: 12, all: false };
   const queryParts = [];
@@ -1495,9 +1501,7 @@ function runSearch(dir) {
 
   const query = queryParts.join(' ').toLowerCase();
 
-  const searchRoots = [
-    dir,
-  ];
+  const searchRoots = scope === 'project' ? [dir] : memorySearchRoots(dir);
 
   if (!query) {
     // No query — list searchable files sorted by recency
@@ -1517,7 +1521,7 @@ function runSearch(dir) {
           const st = fs.statSync(fp);
           if (st.isDirectory()) {
             if (!shouldSkipSearchDir(entry)) collectDir(fp);
-          } else if (isSearchableFile(fp, entry, st)) collectFile(fp);
+          } else if (isSearchableFile(fp, entry, st, scope)) collectFile(fp);
         } catch {}
       }
     }
@@ -1544,7 +1548,7 @@ function runSearch(dir) {
     let mtime = 0;
     try {
       const st = fs.statSync(fp);
-      if (!isSearchableFile(fp, path.basename(fp), st)) return;
+      if (!isSearchableFile(fp, path.basename(fp), st, scope)) return;
       mtime = st.mtimeMs;
     } catch {}
     const lines = fs.readFileSync(fp, 'utf8').split('\n');
@@ -1564,7 +1568,7 @@ function runSearch(dir) {
         const st = fs.statSync(fp);
         if (st.isDirectory()) {
           if (!shouldSkipSearchDir(entry)) walkDir(fp);
-        } else if (isSearchableFile(fp, entry, st)) searchFile(fp);
+        } else if (isSearchableFile(fp, entry, st, scope)) searchFile(fp);
       } catch {}
     }
   }
@@ -1600,6 +1604,17 @@ function runSearch(dir) {
   }
 }
 
+function memorySearchRoots(dir) {
+  return [
+    path.join(dir, '.memoc'),
+    path.join(dir, 'skills'),
+    path.join(dir, 'llms.txt'),
+    path.join(dir, 'AGENTS.md'),
+    path.join(dir, 'CLAUDE.md'),
+    ...Object.values(AGENT_REGISTRY).map(agent => path.join(dir, agent.file)),
+  ];
+}
+
 function shouldSkipSearchDir(name) {
   return new Set([
     '.git', 'node_modules', '.next', 'dist', 'build', 'out', 'coverage',
@@ -1608,11 +1623,14 @@ function shouldSkipSearchDir(name) {
   ]).has(name);
 }
 
-function isSearchableFile(fp, name, st) {
+function isSearchableFile(fp, name, st, scope = 'memory') {
   if (!st || !st.isFile()) return false;
   if (st.size > 1024 * 1024) return false;
   if (name === 'llms.txt' || name.endsWith('rules')) return true;
   const ext = path.extname(fp).toLowerCase();
+  if (scope === 'memory') {
+    return new Set(['.md', '.txt']).has(ext);
+  }
   return new Set([
     '.md', '.txt', '.json', '.jsonc', '.yaml', '.yml', '.toml', '.ini', '.env',
     '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
@@ -1799,7 +1817,8 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  tokens             Estimate token cost of current memory files');
   console.log('  compress           Archive old log.md entries to keep file small');
   console.log('  add <agent>        Add entry file for a specific agent (run without args to list)');
-  console.log('  search "<query>"   Find matching files (use --snippets for line matches)');
+  console.log('  search "<query>"   Search memory/agent docs (use --snippets for line matches)');
+  console.log('  grep "<query>"     Search project source/text files (use --snippets for line matches)');
   console.log('\nSearch flags:');
   console.log('  --files            Show file names and match counts, sorted by relevance + recency (default)');
   console.log('  --snippets         Show matching lines');
@@ -1816,7 +1835,8 @@ if (cmd === 'summary')  { runSummary(cwd);    process.exit(0); }
 if (cmd === 'tokens')   { runTokens(cwd);     process.exit(0); }
 if (cmd === 'compress') { runCompress(cwd);   process.exit(0); }
 if (cmd === 'add')      { runAdd(cwd);        process.exit(0); }
-if (cmd === 'search')   { runSearch(cwd);     process.exit(0); }
+if (cmd === 'search')   { runSearch(cwd, 'memory');  process.exit(0); }
+if (cmd === 'grep')     { runSearch(cwd, 'project'); process.exit(0); }
 
 console.error(`Unknown command: ${cmd}`);
 console.error('Run "memoc --help" for usage.');
