@@ -85,3 +85,23 @@ test('init registers a user-local memoc launcher for unix shells', () => {
     assert.match(profile, /fake home/);
   });
 });
+
+test('search finds source code matches, not only memory files', () => {
+  withTempProject(dir => {
+    const srcDir = path.join(dir, 'src');
+    fs.mkdirSync(srcDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(srcDir, 'particles.cpp'),
+      'void GetParticles() { /* renderer shader */ }\n',
+      'utf8'
+    );
+
+    const output = execFileSync(process.execPath, [cliPath, 'search', 'GetParticles', '--snippets', '--limit', '5'], {
+      cwd: dir,
+      encoding: 'utf8',
+    });
+
+    assert.match(output, /src[\\/]particles\.cpp:1/);
+    assert.match(output, /GetParticles/);
+  });
+});

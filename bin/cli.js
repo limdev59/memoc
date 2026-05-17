@@ -1496,16 +1496,11 @@ function runSearch(dir) {
   const query = queryParts.join(' ').toLowerCase();
 
   const searchRoots = [
-    path.join(dir, '.memoc'),
-    path.join(dir, 'skills'),
-    path.join(dir, 'llms.txt'),
-    path.join(dir, 'AGENTS.md'),
-    path.join(dir, 'CLAUDE.md'),
-    ...Object.values(AGENT_REGISTRY).map(agent => path.join(dir, agent.file)),
+    dir,
   ];
 
   if (!query) {
-    // No query — list all memory files sorted by recency
+    // No query — list searchable files sorted by recency
     const allFiles = [];
     function collectFile(fp) {
       if (!fs.existsSync(fp)) return;
@@ -1519,8 +1514,10 @@ function runSearch(dir) {
       for (const entry of fs.readdirSync(d)) {
         const fp = path.join(d, entry);
         try {
-          if (fs.statSync(fp).isDirectory()) collectDir(fp);
-          else if (entry.endsWith('.md') || entry === 'llms.txt' || entry.endsWith('rules')) collectFile(fp);
+          const st = fs.statSync(fp);
+          if (st.isDirectory()) {
+            if (!shouldSkipSearchDir(entry)) collectDir(fp);
+          } else if (isSearchableFile(fp, entry, st)) collectFile(fp);
         } catch {}
       }
     }
@@ -1545,7 +1542,11 @@ function runSearch(dir) {
     if (!fs.existsSync(fp)) return;
     const rel = path.relative(dir, fp);
     let mtime = 0;
-    try { mtime = fs.statSync(fp).mtimeMs; } catch {}
+    try {
+      const st = fs.statSync(fp);
+      if (!isSearchableFile(fp, path.basename(fp), st)) return;
+      mtime = st.mtimeMs;
+    } catch {}
     const lines = fs.readFileSync(fp, 'utf8').split('\n');
     lines.forEach((line, i) => {
       if (line.toLowerCase().includes(query)) {
@@ -1560,8 +1561,10 @@ function runSearch(dir) {
     for (const entry of fs.readdirSync(d)) {
       const fp = path.join(d, entry);
       try {
-        if (fs.statSync(fp).isDirectory()) walkDir(fp);
-        else if (entry.endsWith('.md') || entry === 'llms.txt' || entry.endsWith('rules')) searchFile(fp);
+        const st = fs.statSync(fp);
+        if (st.isDirectory()) {
+          if (!shouldSkipSearchDir(entry)) walkDir(fp);
+        } else if (isSearchableFile(fp, entry, st)) searchFile(fp);
       } catch {}
     }
   }
@@ -1595,6 +1598,29 @@ function runSearch(dir) {
       console.log(`... ${snippets.length - limited.length} more matches. Use --all to show all, or --limit N.`);
     }
   }
+}
+
+function shouldSkipSearchDir(name) {
+  return new Set([
+    '.git', 'node_modules', '.next', 'dist', 'build', 'out', 'coverage',
+    'Saved', 'Intermediate', 'DerivedDataCache', 'Binaries',
+    '.venv', 'venv', '__pycache__', '.pytest_cache',
+  ]).has(name);
+}
+
+function isSearchableFile(fp, name, st) {
+  if (!st || !st.isFile()) return false;
+  if (st.size > 1024 * 1024) return false;
+  if (name === 'llms.txt' || name.endsWith('rules')) return true;
+  const ext = path.extname(fp).toLowerCase();
+  return new Set([
+    '.md', '.txt', '.json', '.jsonc', '.yaml', '.yml', '.toml', '.ini', '.env',
+    '.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs',
+    '.py', '.rs', '.go', '.java', '.cs', '.cpp', '.cc', '.cxx', '.c', '.h', '.hpp', '.hxx',
+    '.html', '.css', '.scss', '.sass', '.vue', '.svelte',
+    '.sql', '.graphql', '.gql', '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',
+    '.xml', '.gradle', '.kts', '.cmake',
+  ]).has(ext);
 }
 
 // ═══════════════════════════════════════════════════════════════════

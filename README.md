@@ -46,7 +46,7 @@ npx @kevin0181/memoc update
 # Print current status in ~10 lines
 npx @kevin0181/memoc summary
 
-# Find relevant files before opening them (token-efficient)
+# Find relevant project files before opening them (token-efficient)
 npx @kevin0181/memoc search "auth"
 npx @kevin0181/memoc search "auth" --snippets --limit 5
 
