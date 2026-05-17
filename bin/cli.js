@@ -220,6 +220,14 @@ function tplMemocShWrapper() {
   return `#!/bin/sh\nexec npx @kevin0181/memoc "$@"\n`;
 }
 
+function defaultUserBinDir() {
+  if (process.env.MEMOC_USER_BIN_DIR) return process.env.MEMOC_USER_BIN_DIR;
+  if (currentPlatform() === 'win32') {
+    return path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'bin');
+  }
+  return path.join(process.env.HOME || process.cwd(), '.local', 'bin');
+}
+
 function tplEnvPs1() {
   return `$memocBin = Join-Path $PSScriptRoot 'bin'\n$parts = $env:PATH -split [IO.Path]::PathSeparator\nif ($parts -notcontains $memocBin) {\n  $env:PATH = \"$memocBin$([IO.Path]::PathSeparator)$env:PATH\"\n}\n`;
 }
@@ -245,12 +253,29 @@ function ensurePathHelpers(dir, mark) {
   }
 }
 
+function ensureUserLauncher(mark) {
+  const userBin = defaultUserBinDir();
+  const files = [
+    [path.join(userBin, 'memoc.cmd'), tplMemocCmdWrapper, false],
+    [path.join(userBin, 'memoc.ps1'), tplMemocPs1Wrapper, false],
+    [path.join(userBin, 'memoc'), tplMemocShWrapper, true],
+  ];
+
+  for (const [fp, tpl, executable] of files) {
+    const added = ensure(fp, tpl());
+    if (executable) chmodExecutable(fp);
+    mark(added ? 'add' : 'skip', `user bin ${path.basename(fp)}`);
+  }
+
+  return userBin;
+}
+
 function ensurePathRegistration(dir, mark) {
-  const binDir = path.join(dir, '.memoc', 'bin');
+  const binDir = ensureUserLauncher(mark);
   const pathSep = path.delimiter;
 
   if ((process.env.PATH || '').split(pathSep).some(p => samePath(p, binDir))) {
-    mark('skip', 'PATH (.memoc/bin already active)');
+    mark('skip', 'PATH (user memoc bin already active)');
     return;
   }
 
@@ -261,8 +286,9 @@ function ensurePathRegistration(dir, mark) {
     return;
   }
 
-  if (process.platform !== 'win32') {
-    mark('skip', 'PATH registration (source .memoc/env.sh for this shell)');
+  if (currentPlatform() !== 'win32') {
+    const updated = ensureUnixPathRegistration(binDir);
+    mark(updated ? 'update' : 'skip', `${currentPlatform()} PATH (${userPathShellHint(binDir)})`);
     return;
   }
 
@@ -277,7 +303,7 @@ function ensurePathRegistration(dir, mark) {
       .trim();
     const parts = current.split(pathSep).filter(Boolean);
     if (parts.some(p => samePath(p, binDir))) {
-      mark('skip', 'User PATH (.memoc/bin already registered)');
+      mark('skip', 'User PATH (memoc bin already registered)');
       return;
     }
     const nextPath = [binDir, ...parts].join(pathSep);
@@ -287,10 +313,53 @@ function ensurePathRegistration(dir, mark) {
       '-Command',
       `[Environment]::SetEnvironmentVariable('Path', ${JSON.stringify(nextPath)}, 'User')`,
     ], { stdio: 'ignore' });
-    mark('update', 'User PATH (.memoc/bin added; open a new terminal if needed)');
+    mark('update', 'User PATH (memoc bin added; open a new terminal if needed)');
   } catch {
     mark('skip', 'User PATH registration failed (use . .\\.memoc\\env.ps1)');
   }
+}
+
+function ensureUnixPathRegistration(binDir) {
+  if (process.env.MEMOC_SKIP_PATH_REGISTER === '1') return false;
+
+  const home = process.env.HOME;
+  if (!home) return false;
+
+  const block = [
+    '# memoc PATH',
+    `MEMOC_BIN=${shellSingleQuote(binDir)}`,
+    'case ":$PATH:" in *":$MEMOC_BIN:"*) ;; *) PATH="$MEMOC_BIN:$PATH"; export PATH ;; esac',
+    '# end memoc PATH',
+  ].join('\n');
+
+  const candidates = [
+    path.join(home, '.profile'),
+    path.join(home, '.zshrc'),
+    path.join(home, '.bashrc'),
+  ];
+
+  let changed = false;
+  for (const fp of candidates) {
+    try {
+      const src = fs.existsSync(fp) ? fs.readFileSync(fp, 'utf8') : '';
+      if (src.includes(binDir) || src.includes('# memoc PATH')) continue;
+      fs.appendFileSync(fp, `${src.endsWith('\n') || !src ? '' : '\n'}\n${block}\n`, 'utf8');
+      changed = true;
+    } catch {}
+  }
+  return changed;
+}
+
+function userPathShellHint(binDir) {
+  return `user bin ${binDir} ${process.env.MEMOC_SKIP_PATH_REGISTER === '1' ? 'test mode' : 'registered; open a new terminal if needed'}`;
+}
+
+function currentPlatform() {
+  return process.env.MEMOC_PLATFORM || process.platform;
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replace(/'/g, `'\\''`)}'`;
 }
 
 function samePath(a, b) {
@@ -344,7 +413,7 @@ function managedBlock() {
 ## Session Start
 - [ ] Read \`.memoc/session-summary.md\`
 - [ ] \`.pending\` exists? → review changed files → update memory if needed → delete it
-- [ ] Put the project-local memoc wrapper on PATH when needed: PowerShell \`. .\\.memoc\\env.ps1\`; sh \`. ./.memoc/env.sh\`
+- [ ] If \`memoc\` is not found in an existing shell, open a new terminal or load the local helper: PowerShell \`. .\\.memoc\\env.ps1\`; sh \`. ./.memoc/env.sh\`
 
 ## Before Opening More Files
 - [ ] Run memoc commands in this order: \`memoc search "<query>"\` → \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` (Windows) or \`.memoc/bin/memoc search "<query>"\` (sh) → \`npx @kevin0181/memoc search "<query>"\`

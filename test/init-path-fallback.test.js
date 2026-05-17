@@ -20,10 +20,15 @@ function withTempProject(fn) {
 
 test('init creates PATH helpers and teaches agents command fallbacks', () => {
   withTempProject(dir => {
+    const userBin = path.join(dir, 'fake-user-bin');
     const output = execFileSync(process.execPath, [cliPath, 'init'], {
       cwd: dir,
       encoding: 'utf8',
-      env: { ...process.env, MEMOC_SKIP_PATH_REGISTER: '1' },
+      env: {
+        ...process.env,
+        MEMOC_SKIP_PATH_REGISTER: '1',
+        MEMOC_USER_BIN_DIR: userBin,
+      },
     });
 
     const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
@@ -39,5 +44,32 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.ok(fs.existsSync(path.join(dir, '.memoc', 'bin', 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(dir, '.memoc', 'bin', 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(dir, '.memoc', 'bin', 'memoc')));
+    assert.ok(fs.existsSync(path.join(userBin, 'memoc.cmd')));
+    assert.ok(fs.existsSync(path.join(userBin, 'memoc.ps1')));
+    assert.ok(fs.existsSync(path.join(userBin, 'memoc')));
+  });
+});
+
+test('init registers a user-local memoc launcher for unix shells', () => {
+  withTempProject(dir => {
+    const home = path.join(dir, 'fake home');
+    const userBin = path.join(home, '.local', 'bin');
+    fs.mkdirSync(home, { recursive: true });
+
+    execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        HOME: home,
+        MEMOC_PLATFORM: 'linux',
+        MEMOC_USER_BIN_DIR: userBin,
+      },
+    });
+
+    assert.ok(fs.existsSync(path.join(userBin, 'memoc')));
+    const profile = fs.readFileSync(path.join(home, '.profile'), 'utf8');
+    assert.match(profile, /MEMOC_BIN=/);
+    assert.match(profile, /fake home/);
   });
 });
