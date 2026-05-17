@@ -209,15 +209,15 @@ function write(filePath, content) {
 }
 
 function tplMemocCmdWrapper() {
-  return `@echo off\r\nnpx @kevin0181/memoc %*\r\n`;
+  return `@echo off\r\nnpm exec --yes --package "@kevin0181/memoc" -- memoc %*\r\n`;
 }
 
 function tplMemocPs1Wrapper() {
-  return `npx @kevin0181/memoc @args\nexit $LASTEXITCODE\n`;
+  return `npm exec --yes --package '@kevin0181/memoc' -- memoc @args\nexit $LASTEXITCODE\n`;
 }
 
 function tplMemocShWrapper() {
-  return `#!/bin/sh\nexec npx @kevin0181/memoc "$@"\n`;
+  return `#!/bin/sh\nexec npm exec --yes --package '@kevin0181/memoc' -- memoc "$@"\n`;
 }
 
 function defaultUserBinDir() {
@@ -247,9 +247,9 @@ function ensurePathHelpers(dir, mark) {
 
   for (const [fp, tpl, executable] of files) {
     const rel = path.relative(dir, fp);
-    const added = ensure(fp, tpl());
+    const added = writeIfChanged(fp, tpl());
     if (executable) chmodExecutable(fp);
-    mark(added ? 'add' : 'skip', rel);
+    mark(added, rel);
   }
 }
 
@@ -267,10 +267,22 @@ function writeLaunchers(binDir, mark, label) {
   ];
 
   for (const [fp, tpl, executable] of files) {
-    const added = ensure(fp, tpl());
+    const added = writeIfChanged(fp, tpl());
     if (executable) chmodExecutable(fp);
-    mark(added ? 'add' : 'skip', `${label} ${path.basename(fp)}`);
+    mark(added, `${label} ${path.basename(fp)}`);
   }
+}
+
+function writeIfChanged(filePath, content) {
+  if (!fs.existsSync(filePath)) {
+    write(filePath, content);
+    return 'add';
+  }
+  try {
+    if (fs.readFileSync(filePath, 'utf8') === content) return 'skip';
+  } catch {}
+  write(filePath, content);
+  return 'update';
 }
 
 function ensurePathRegistration(dir, mark) {

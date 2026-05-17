@@ -50,6 +50,9 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc')));
+    assert.match(fs.readFileSync(path.join(userBin, 'memoc.cmd'), 'utf8'), /npm exec --yes --package "@kevin0181\/memoc"/);
+    assert.match(fs.readFileSync(path.join(userBin, 'memoc.ps1'), 'utf8'), /npm exec --yes --package '@kevin0181\/memoc'/);
+    assert.match(fs.readFileSync(path.join(userBin, 'memoc'), 'utf8'), /npm exec --yes --package '@kevin0181\/memoc'/);
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc')));
