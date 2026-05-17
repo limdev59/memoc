@@ -21,6 +21,8 @@ function withTempProject(fn) {
 test('init creates PATH helpers and teaches agents command fallbacks', () => {
   withTempProject(dir => {
     const userBin = path.join(dir, 'fake-user-bin');
+    const activePathBin = path.join(dir, 'active-path-bin');
+    fs.mkdirSync(activePathBin, { recursive: true });
     const output = execFileSync(process.execPath, [cliPath, 'init'], {
       cwd: dir,
       encoding: 'utf8',
@@ -28,6 +30,7 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
         ...process.env,
         MEMOC_SKIP_PATH_REGISTER: '1',
         MEMOC_USER_BIN_DIR: userBin,
+        PATH: `${activePathBin}${path.delimiter}${process.env.PATH || ''}`,
       },
     });
 
@@ -47,6 +50,9 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc')));
+    assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.cmd')));
+    assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.ps1')));
+    assert.ok(fs.existsSync(path.join(activePathBin, 'memoc')));
   });
 });
 

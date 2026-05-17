@@ -255,22 +255,26 @@ function ensurePathHelpers(dir, mark) {
 
 function ensureUserLauncher(mark) {
   const userBin = defaultUserBinDir();
+  writeLaunchers(userBin, mark, 'user bin');
+  return userBin;
+}
+
+function writeLaunchers(binDir, mark, label) {
   const files = [
-    [path.join(userBin, 'memoc.cmd'), tplMemocCmdWrapper, false],
-    [path.join(userBin, 'memoc.ps1'), tplMemocPs1Wrapper, false],
-    [path.join(userBin, 'memoc'), tplMemocShWrapper, true],
+    [path.join(binDir, 'memoc.cmd'), tplMemocCmdWrapper, false],
+    [path.join(binDir, 'memoc.ps1'), tplMemocPs1Wrapper, false],
+    [path.join(binDir, 'memoc'), tplMemocShWrapper, true],
   ];
 
   for (const [fp, tpl, executable] of files) {
     const added = ensure(fp, tpl());
     if (executable) chmodExecutable(fp);
-    mark(added ? 'add' : 'skip', `user bin ${path.basename(fp)}`);
+    mark(added ? 'add' : 'skip', `${label} ${path.basename(fp)}`);
   }
-
-  return userBin;
 }
 
 function ensurePathRegistration(dir, mark) {
+  ensureCurrentPathLauncher(mark);
   const binDir = ensureUserLauncher(mark);
   const pathSep = path.delimiter;
 
@@ -316,6 +320,75 @@ function ensurePathRegistration(dir, mark) {
     mark('update', 'User PATH (memoc bin added; open a new terminal if needed)');
   } catch {
     mark('skip', 'User PATH registration failed (use . .\\.memoc\\env.ps1)');
+  }
+}
+
+function ensureCurrentPathLauncher(mark) {
+  const target = findWritablePathDir();
+  if (!target) {
+    mark('skip', 'active PATH launcher (no writable PATH directory found)');
+    return false;
+  }
+  writeLaunchers(target, mark, 'active PATH');
+  return true;
+}
+
+function findWritablePathDir() {
+  const dirs = [...new Set((process.env.PATH || '').split(path.delimiter).filter(Boolean))];
+  const npmBin = npmGlobalBinDir();
+  const ranked = dirs
+    .filter(d => !isVolatilePathDir(d))
+    .filter(d => {
+      try { return fs.existsSync(d) && fs.statSync(d).isDirectory() && canWriteDir(d); }
+      catch { return false; }
+    })
+    .sort((a, b) => pathRank(a, npmBin) - pathRank(b, npmBin));
+  return ranked[0] || null;
+}
+
+function pathRank(dir, npmBin) {
+  if (npmBin && samePath(dir, npmBin)) return 0;
+  const lower = dir.toLowerCase();
+  for (const root of userWritableRoots()) {
+    if (root && lower.startsWith(root.toLowerCase())) return 1;
+  }
+  return 5;
+}
+
+function userWritableRoots() {
+  return [
+    process.env.APPDATA,
+    process.env.LOCALAPPDATA,
+    process.env.HOME,
+    process.env.USERPROFILE,
+  ].filter(Boolean).map(p => path.resolve(p));
+}
+
+function npmGlobalBinDir() {
+  try {
+    const prefix = require('child_process').execFileSync('npm', ['config', 'get', 'prefix'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    if (!prefix) return null;
+    return currentPlatform() === 'win32' ? prefix : path.join(prefix, 'bin');
+  } catch {
+    return null;
+  }
+}
+
+function isVolatilePathDir(dir) {
+  const lower = dir.toLowerCase();
+  return lower.includes(`${path.sep}_npx${path.sep}`) ||
+    lower.includes(`${path.sep}node_modules${path.sep}.bin`) ||
+    lower.includes(`${path.sep}npm-cache${path.sep}_npx${path.sep}`);
+}
+
+function canWriteDir(dir) {
+  const probe = path.join(dir, `.memoc-write-test-${process.pid}-${Date.now()}`);
+  try {
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return true;
+  } catch {
+    return false;
   }
 }
 

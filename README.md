@@ -12,7 +12,7 @@ npx @kevin0181/memoc init
 
 Run inside your project directory. Detects your stack automatically and generates everything agents need.
 
-`init` also creates PATH helpers so agents can keep using memoc even when the global/npm bin is not on PATH. It installs a user-local `memoc` launcher and adds that launcher directory to PATH on Windows, macOS, and Linux; open a new terminal if the current shell does not pick it up immediately.
+`init` also creates PATH helpers so agents can keep using memoc even when the global/npm bin is not on PATH. It installs a `memoc` launcher into a writable directory already on the current PATH when possible, then also installs a user-local launcher and registers that launcher directory on Windows, macOS, and Linux.
 
 ```bash
 # PowerShell
