@@ -12,6 +12,18 @@ npx @kevin0181/memoc init
 
 Run inside your project directory. Detects your stack automatically and generates everything agents need.
 
+`init` also creates project-local PATH helpers so agents can keep using memoc even when the global/npm bin is not on PATH:
+
+```bash
+# PowerShell
+. .\.memoc\env.ps1
+
+# sh/bash
+. ./.memoc/env.sh
+```
+
+Agents are instructed to try commands in this order: `memoc <command>`, `.\.memoc\bin\memoc.cmd <command>` on Windows or `.memoc/bin/memoc <command>` in sh, then `npx @kevin0181/memoc <command>`.
+
 ---
 
 ## The Problem
@@ -62,6 +74,8 @@ llms.txt                                     ← LLM-facing project map
 .claude/settings.json                        ← Claude Code Stop hook
 
 .memoc/
+  bin/memoc                                  ← project-local wrapper for PATH fallback
+  env.ps1 · env.sh                           ← shell helpers that prepend .memoc/bin to PATH
   session-summary.md                         ← Only required startup read (~150 tokens)
   02-current-project-state.md               ← Status, open tasks, commands
   03-decisions.md                            ← Durable decision log

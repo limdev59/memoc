@@ -192,6 +192,10 @@ function hideOnWindows(dirPath) {
   }
 }
 
+function chmodExecutable(filePath) {
+  try { fs.chmodSync(filePath, 0o755); } catch {}
+}
+
 function ensure(filePath, content) {
   if (fs.existsSync(filePath)) return false;
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
@@ -202,6 +206,43 @@ function ensure(filePath, content) {
 function write(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function tplMemocCmdWrapper() {
+  return `@echo off\r\nnpx @kevin0181/memoc %*\r\n`;
+}
+
+function tplMemocPs1Wrapper() {
+  return `npx @kevin0181/memoc @args\nexit $LASTEXITCODE\n`;
+}
+
+function tplMemocShWrapper() {
+  return `#!/bin/sh\nexec npx @kevin0181/memoc "$@"\n`;
+}
+
+function tplEnvPs1() {
+  return `$memocBin = Join-Path $PSScriptRoot 'bin'\n$parts = $env:PATH -split [IO.Path]::PathSeparator\nif ($parts -notcontains $memocBin) {\n  $env:PATH = \"$memocBin$([IO.Path]::PathSeparator)$env:PATH\"\n}\n`;
+}
+
+function tplEnvSh() {
+  return `# Source this from the project root to put the local memoc wrapper first in PATH.\nMEMOC_DIR="$(pwd)/.memoc"\ncase ":$PATH:" in\n  *":$MEMOC_DIR/bin:"*) ;;\n  *) PATH="$MEMOC_DIR/bin:$PATH"; export PATH ;;\nesac\n`;
+}
+
+function ensurePathHelpers(dir, mark) {
+  const files = [
+    [path.join(dir, '.memoc', 'bin', 'memoc.cmd'), tplMemocCmdWrapper, false],
+    [path.join(dir, '.memoc', 'bin', 'memoc.ps1'), tplMemocPs1Wrapper, false],
+    [path.join(dir, '.memoc', 'bin', 'memoc'), tplMemocShWrapper, true],
+    [path.join(dir, '.memoc', 'env.ps1'), tplEnvPs1, false],
+    [path.join(dir, '.memoc', 'env.sh'), tplEnvSh, true],
+  ];
+
+  for (const [fp, tpl, executable] of files) {
+    const rel = path.relative(dir, fp);
+    const added = ensure(fp, tpl());
+    if (executable) chmodExecutable(fp);
+    mark(added ? 'add' : 'skip', rel);
+  }
 }
 
 function updateSection(filePath, startMark, endMark, inner) {
@@ -249,9 +290,10 @@ function managedBlock() {
 ## Session Start
 - [ ] Read \`.memoc/session-summary.md\`
 - [ ] \`.pending\` exists? → review changed files → update memory if needed → delete it
+- [ ] Put the project-local memoc wrapper on PATH when needed: PowerShell \`. .\\.memoc\\env.ps1\`; sh \`. ./.memoc/env.sh\`
 
 ## Before Opening More Files
-- [ ] Run \`memoc search "<query>"\` first
+- [ ] Run memoc commands in this order: \`memoc search "<query>"\` → \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` (Windows) or \`.memoc/bin/memoc search "<query>"\` (sh) → \`npx @kevin0181/memoc search "<query>"\`
 - [ ] Open on demand: \`02\` status · \`04\` resume · \`06\` rules · \`llms.txt\` map
 - [ ] Keep output small: \`summary\`, \`search --limit\`, \`search --snippets\`
 
@@ -567,6 +609,7 @@ On-demand reference only. The entry-file managed block is authoritative.
 ## Search First
 
 \`memoc search "<query>"\` — returns file:line matches across all memory files.
+If \`memoc\` is not on PATH, try \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` on Windows or \`.memoc/bin/memoc search "<query>"\` in sh, then \`npx @kevin0181/memoc search "<query>"\`.
 Use it before opening any file to avoid reading more than needed.
 `;
 }
@@ -732,6 +775,10 @@ This project uses \`memoc\` to maintain agent-readable project memory.
 ## Commands
 
 \`\`\`bash
+# Optional: put the project-local wrapper first in PATH for this shell
+# PowerShell: . .\\.memoc\\env.ps1
+# sh/bash:    . ./.memoc/env.sh
+
 # First-time setup (or re-run to update managed sections)
 memoc init
 
@@ -746,11 +793,13 @@ memoc search "<query>" --limit 12
 memoc search "<query>" --snippets --limit 5
 \`\`\`
 
+If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh. If that is unavailable, use \`npx @kevin0181/memoc <command>\`.
+
 ## Agent Read Order
 
 1. Entry-file managed block.
 2. \`.memoc/session-summary.md\` only.
-3. \`memoc search "<query>"\` to get matching files first.
+3. Search in this order: \`memoc search "<query>"\`, \`.\\.memoc\\bin\\memoc.cmd search "<query>"\` or \`.memoc/bin/memoc search "<query>"\`, \`npx @kevin0181/memoc search "<query>"\`.
 4. Use \`--snippets\` only when file names are not enough.
 5. Open only task-relevant memory files.
 
@@ -846,7 +895,7 @@ Use this local skill after meaningful project work so future agents can continue
 ## Required Reads
 
 1. \`.memoc/session-summary.md\`
-2. \`memoc summary\` or \`memoc search "<query>"\`
+2. \`memoc summary\` or \`memoc search "<query>"\`; if unavailable, use \`.\\.memoc\\bin\\memoc.cmd <command>\` or \`.memoc/bin/memoc <command>\`, then \`npx @kevin0181/memoc <command>\`
 3. Open only files you will use or update.
 
 ## Maintenance Checklist
@@ -1023,6 +1072,9 @@ function run(dir, forceUpdate) {
       mark('skip', '.gitignore (.memoc/.pending already present)');
     }
 
+    // PATH helpers — let agents run memoc even when the npm bin is not on PATH
+    ensurePathHelpers(dir, mark);
+
   } else {
     // ── UPDATE MODE
     console.log(`\n  memoc update — ${path.basename(dir)}`);
@@ -1111,6 +1163,9 @@ function run(dir, forceUpdate) {
       if (ensure(fp, tpl())) mark('add', rel);
       // silently skip existing — user/agent owns them
     }
+
+    // PATH helpers — let agents run memoc even when the npm bin is not on PATH
+    ensurePathHelpers(dir, mark);
 
     // Append update record to log.md
     const logPath = path.join(memDir, 'log.md');
