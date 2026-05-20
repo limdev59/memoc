@@ -8,11 +8,14 @@ Scaffolds a Markdown-based project memory into any codebase. Works with Claude C
 
 ```bash
 npx @kevin0181/memoc init
+
+# Upgrade memoc in this project without deleting existing memory
+npx @kevin0181/memoc@latest upgrade
 ```
 
 Run inside your project directory. Detects your stack automatically and generates everything agents need.
 
-`init` also creates PATH helpers so agents can keep using memoc even when the global/npm bin is not on PATH. It installs a `memoc` launcher into a writable directory already on the current PATH when possible, then also installs a user-local launcher and registers that launcher directory on Windows, macOS, and Linux.
+`init` also creates project-local PATH helpers so agents can keep using memoc even when the global/npm bin is not on PATH.
 
 ```bash
 # PowerShell
@@ -22,7 +25,46 @@ Run inside your project directory. Detects your stack automatically and generate
 . ./.memoc/env.sh
 ```
 
-Agents are instructed to try commands in this order: `memoc <command>`, `.\.memoc\bin\memoc.cmd <command>` on Windows or `.memoc/bin/memoc <command>` in sh, then `npx @kevin0181/memoc <command>`.
+Agents are instructed to use the project-local wrapper if PATH fails:
+
+```bash
+# Windows
+.\.memoc\bin\memoc.cmd summary
+
+# macOS / Linux
+.memoc/bin/memoc summary
+```
+
+---
+
+## Ask An Agent To Install
+
+If you are giving this repo or npm package to an AI coding agent, use a prompt like:
+
+```text
+Install memoc in this project and run init.
+Use npm/npx if available. If npm is missing but node is available, clone or download
+https://github.com/neneee0181/memoc and run `node <memoc-repo>/bin/cli.js init`
+from this project's root. After init, verify with the project-local wrapper:
+Windows: .\.memoc\bin\memoc.cmd summary
+macOS/Linux: .memoc/bin/memoc summary
+```
+
+Agent install checklist:
+
+1. Run `node --version`. If Node.js is missing, ask the user to install Node.js LTS first.
+2. Run `npx @kevin0181/memoc init` from the target project root.
+3. If `npx` or `npm` is missing, use GitHub source instead:
+   ```bash
+   git clone https://github.com/neneee0181/memoc.git
+   node /path/to/memoc/bin/cli.js init
+   ```
+4. If `git` is missing too, download the GitHub ZIP, extract it, then run `node /path/to/memoc/bin/cli.js init`.
+5. After init, do not depend on global PATH. Use the project-local wrapper when needed:
+   - Windows: `.\.memoc\bin\memoc.cmd <command>`
+   - macOS/Linux: `.memoc/bin/memoc <command>`
+
+If `node --version` fails, memoc cannot run yet. Install Node.js first, then repeat the steps above.
 
 ---
 
@@ -65,6 +107,37 @@ npx @kevin0181/memoc add cursor
 npx @kevin0181/memoc add windsurf
 npx @kevin0181/memoc add copilot
 npx @kevin0181/memoc add gemini
+```
+
+---
+
+## Upgrade Existing Projects
+
+memoc never auto-updates itself. Upgrade only when you choose to run:
+
+```bash
+npx @kevin0181/memoc@latest upgrade
+```
+
+Run it from the project root. It preserves existing project memory, including:
+
+- `.memoc/session-summary.md`
+- `.memoc/02-current-project-state.md` human-written sections
+- `.memoc/03-decisions.md`
+- `.memoc/04-handoff.md`
+- `.memoc/06-project-rules.md`
+- `.memoc/log.md`
+- `.memoc/systems/`
+- `.memoc/wiki/`
+
+It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and missing template files. If `memoc` is not on PATH after upgrading, keep using:
+
+```bash
+# Windows
+.\.memoc\bin\memoc.cmd summary
+
+# macOS / Linux
+.memoc/bin/memoc summary
 ```
 
 ---

@@ -188,7 +188,7 @@ function scriptsMd(scripts) {
 
 function hideOnWindows(dirPath) {
   if (process.platform === 'win32') {
-    try { require('child_process').execSync(`attrib +h "${dirPath}"`, { stdio: 'ignore' }); } catch {}
+    try { require('child_process').execFileSync('attrib', ['+h', dirPath], { stdio: 'ignore' }); } catch {}
   }
 }
 
@@ -245,7 +245,7 @@ function tplEnvPs1() {
 }
 
 function tplEnvSh() {
-  return `# Source this from the project root to put the local memoc wrapper first in PATH.\nMEMOC_DIR="$(pwd)/.memoc"\ncase ":$PATH:" in\n  *":$MEMOC_DIR/bin:"*) ;;\n  *) PATH="$MEMOC_DIR/bin:$PATH"; export PATH ;;\nesac\n`;
+  return `# Source this from the project root to put the local memoc wrapper first in PATH.\nMEMOC_DIR="$PWD/.memoc"\ncase ":$PATH:" in\n  *":$MEMOC_DIR/bin:"*) ;;\n  *) PATH="$MEMOC_DIR/bin:$PATH"; export PATH ;;\nesac\n`;
 }
 
 function ensurePathHelpers(dir, mark) {
@@ -499,11 +499,10 @@ function samePath(a, b) {
 function updateSection(filePath, startMark, endMark, inner) {
   if (!fs.existsSync(filePath)) return false;
   const src = fs.readFileSync(filePath, 'utf8');
-  const s = src.indexOf(startMark);
-  const e = src.indexOf(endMark);
-  if (s === -1 || e === -1) return false;
+  const range = findMarkedRange(src, startMark, endMark);
+  if (!range) return false;
   write(filePath,
-    src.slice(0, s) + startMark + '\n' + inner + '\n' + endMark + src.slice(e + endMark.length)
+    src.slice(0, range.s) + startMark + '\n' + inner + '\n' + endMark + src.slice(range.e + range.endMark.length)
   );
   return true;
 }
@@ -512,7 +511,7 @@ function updateSection(filePath, startMark, endMark, inner) {
 // SECTION MARKERS
 // ═══════════════════════════════════════════════════════════════════
 
-const mk = n => [`<!-- context-forge:${n}:start -->`, `<!-- context-forge:${n}:end -->`];
+const mk = n => [`<!-- memoc:${n}:start -->`, `<!-- memoc:${n}:end -->`];
 const [MGMT_S,  MGMT_E]  = mk('managed');
 const [ID_S,    ID_E]    = mk('identity');
 const [SNAP_S,  SNAP_E]  = mk('snapshot');
@@ -520,6 +519,23 @@ const [CORE_S,  CORE_E]  = mk('core');
 const [HDR_S,   HDR_E]   = mk('header');
 const [SYS_S,   SYS_E]   = mk('systems');
 const [WIKI_S,  WIKI_E]  = mk('wiki');
+
+function markerPairs(startMark, endMark) {
+  const legacyStart = startMark.replace('<!-- memoc:', '<!-- context-forge:');
+  const legacyEnd = endMark.replace('<!-- memoc:', '<!-- context-forge:');
+  return legacyStart === startMark
+    ? [[startMark, endMark]]
+    : [[startMark, endMark], [legacyStart, legacyEnd]];
+}
+
+function findMarkedRange(src, startMark, endMark) {
+  for (const [sMark, eMark] of markerPairs(startMark, endMark)) {
+    const s = src.indexOf(sMark);
+    const e = src.indexOf(eMark);
+    if (s !== -1 && e !== -1 && e > s) return { s, e, endMark: eMark };
+  }
+  return null;
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // AGENT REGISTRY — third-party agent entry files (added via `add`)
@@ -536,7 +552,7 @@ const AGENT_REGISTRY = {
 // DYNAMIC CONTENT (re-generated on update)
 // ═══════════════════════════════════════════════════════════════════
 
-function managedBlock() {
+function legacyManagedBlock() {
   return `${MGMT_S}
 ## Session Start
 - [ ] Read \`.memoc/session-summary.md\`
@@ -555,6 +571,28 @@ function managedBlock() {
 - [ ] Work incomplete or risky → \`04-handoff.md\` (verified commands, unverified items, next steps)
 - [ ] Rule/preference set → \`06-project-rules.md\`
 - [ ] Wiki/systems work → read \`skills/project-memory-maintainer/SKILL.md\`
+${MGMT_E}`;
+}
+
+function managedBlock() {
+  return `${MGMT_S}
+## Session Start
+- [ ] Read \`.memoc/session-summary.md\`
+- [ ] \`.pending\` exists? Review changed files, update memory if needed, then delete it.
+- [ ] If \`memoc\` is not found, use the project-local wrapper for the rest of the session: Windows \`.\\.memoc\\bin\\memoc.cmd <command>\`; sh \`.memoc/bin/memoc <command>\`
+
+## Before Opening More Files
+- [ ] Search memory first: \`memoc search "<query>" --limit 5\`, or wrapper fallback above if PATH fails
+- [ ] Open on demand: \`02\` status, \`04\` resume, \`06\` rules, \`llms.txt\` map
+- [ ] If memory search is not enough, search project files with \`memoc grep "<query>" --limit 5\` (or wrapper fallback)
+- [ ] Keep output small: \`summary\`, \`search --limit\`, \`grep --limit\`, \`--snippets\`
+
+## Before Finishing _(update only applicable files; skip Q&A / throwaway exploration)_
+- [ ] Code/config/deps changed? Update \`02\` + \`session-summary.md\`
+- [ ] Decision made? Update \`03-decisions.md\` + \`02\`
+- [ ] Work incomplete or risky? Update \`04-handoff.md\`
+- [ ] Rule/preference set? Update \`06-project-rules.md\`
+- [ ] Wiki/systems work? Read \`skills/project-memory-maintainer/SKILL.md\`
 ${MGMT_E}`;
 }
 
@@ -1020,7 +1058,7 @@ Append-only chronological log for project memory updates.
 `;
 }
 
-function tplContextForgeUsage() {
+function tplMemocUsage() {
   return `# memoc Usage
 
 This project uses \`memoc\` to maintain agent-readable project memory.
@@ -1034,6 +1072,9 @@ This project uses \`memoc\` to maintain agent-readable project memory.
 
 # First-time setup (or re-run to update managed sections)
 memoc init
+
+# Refresh memoc itself when run through npx @latest, preserving project memory
+memoc upgrade
 
 # Explicitly update managed sections based on current project state
 memoc update
@@ -1050,15 +1091,18 @@ memoc grep "<query>" --limit 12
 memoc grep "<query>" --snippets --limit 5
 \`\`\`
 
-If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh. If that is unavailable, use \`npx @kevin0181/memoc <command>\`.
+If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh for the rest of the session. If the local wrapper is missing, use \`npx @kevin0181/memoc <command>\` or re-run init.
 
 ## Agent Read Order
 
 1. Entry-file managed block.
 2. \`.memoc/session-summary.md\` only.
-3. Search memory first: \`memoc search "<query>"\`.
-4. If memory is not enough, search project files: \`memoc grep "<query>" --limit 5\`.
-5. Use \`--snippets\` only when file names are not enough.
+3. Search memory first with one or two concrete terms: \`memoc search "<query>" --limit 5\`.
+4. Open only the matching memory file(s) that matter.
+5. If memory is not enough, search project files: \`memoc grep "<query>" --limit 5\`.
+6. Use \`--snippets\` only when file names are not enough.
+
+Use \`memoc search\` for known concepts, changed areas, decisions, tasks, or handoff notes. Skip it for brand-new questions where no prior memory can exist.
 
 ## When To Run Memory Updates
 
@@ -1189,7 +1233,7 @@ Usually skip for pure Q&A, tiny edits with no future impact, or throwaway explor
 // ═══════════════════════════════════════════════════════════════════
 
 function claudeStopHookCmd() {
-  return `node -e "const fs=require('fs'),{execSync}=require('child_process');try{const o=execSync('git status --porcelain',{stdio:'pipe'}).toString();if(o.trim()){const files=o.trim().split('\\n').map(l=>l.slice(3).trim()).filter(Boolean).slice(0,8).join(', ');fs.writeFileSync('.memoc/.pending',new Date().toISOString()+'\\n'+files)}}catch{}" 2>/dev/null || true`;
+  return `node -e "const fs=require('fs'),{execFileSync}=require('child_process');try{const o=execFileSync('git',['status','--porcelain'],{encoding:'utf8',stdio:['ignore','pipe','ignore']});if(o.trim()){const files=o.trim().split(/\\r?\\n/).map(l=>l.slice(3).trim()).filter(Boolean).slice(0,8).join(', ');fs.writeFileSync('.memoc/.pending',new Date().toISOString()+'\\n'+files)}}catch{}"`;
 }
 
 function tplClaudeSettings() {
@@ -1206,22 +1250,88 @@ function ensureClaudeStopHook(settingsPath) {
   try { settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8')); }
   catch { settings = {}; }
 
-  if (!settings.hooks) settings.hooks = {};
-  if (!settings.hooks.Stop) settings.hooks.Stop = [];
+  if (!settings.hooks || typeof settings.hooks !== 'object' || Array.isArray(settings.hooks)) settings.hooks = {};
+  if (!Array.isArray(settings.hooks.Stop)) settings.hooks.Stop = [];
 
-  const alreadyPresent = settings.hooks.Stop.some(entry =>
-    Array.isArray(entry.hooks) && entry.hooks.some(h => h.command === cmd)
+  let hasCurrent = false;
+  let changed = false;
+  for (const entry of settings.hooks.Stop) {
+    if (!Array.isArray(entry.hooks)) continue;
+    const nextHooks = [];
+    for (const hook of entry.hooks) {
+      if (hook && hook.command === cmd) {
+        if (hasCurrent) changed = true;
+        else {
+          hasCurrent = true;
+          nextHooks.push(hook);
+        }
+      } else if (isMemocClaudeStopHook(hook)) {
+        changed = true;
+      } else {
+        nextHooks.push(hook);
+      }
+    }
+    entry.hooks = nextHooks;
+  }
+  settings.hooks.Stop = settings.hooks.Stop.filter(entry =>
+    !Array.isArray(entry.hooks) || entry.hooks.length > 0
   );
-  if (alreadyPresent) return false; // no change needed
+  if (hasCurrent && !changed) return false; // no change needed
 
-  settings.hooks.Stop.push({ matcher: '', hooks: [{ type: 'command', command: cmd }] });
+  if (!hasCurrent) settings.hooks.Stop.push({ matcher: '', hooks: [{ type: 'command', command: cmd }] });
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', 'utf8');
-  return true; // merged
+  return true; // merged or migrated
+}
+
+function isMemocClaudeStopHook(hook) {
+  if (!hook || typeof hook.command !== 'string') return false;
+  const command = hook.command;
+  return command.includes('.memoc/.pending') &&
+    command.includes('git') &&
+    command.includes('status') &&
+    command.includes('--porcelain');
 }
 
 // ═══════════════════════════════════════════════════════════════════
 // MANAGED BLOCK UPDATE (CLAUDE.md / AGENTS.md)
 // ═══════════════════════════════════════════════════════════════════
+
+function ensureClaudeStopHookFile(dir, mark) {
+  const claudeDir = path.join(dir, '.claude');
+  const claudeSettings = path.join(claudeDir, 'settings.json');
+  fs.mkdirSync(claudeDir, { recursive: true });
+  if (!fs.existsSync(claudeSettings)) {
+    write(claudeSettings, tplClaudeSettings());
+    mark('add', '.claude/settings.json');
+    return;
+  }
+  const merged = ensureClaudeStopHook(claudeSettings);
+  mark(merged ? 'update' : 'skip', `.claude/settings.json (Stop hook ${merged ? 'merged' : 'already present'})`);
+}
+
+function ensurePendingGitignore(dir, mark) {
+  const gitignorePath = path.join(dir, '.gitignore');
+  const PENDING_ENTRY = '.memoc/.pending';
+  const gitignoreContent = fs.existsSync(gitignorePath)
+    ? fs.readFileSync(gitignorePath, 'utf8') : '';
+  const hasPendingEntry = gitignoreContent
+    .split(/\r?\n/)
+    .some(line => line.trim() === PENDING_ENTRY);
+  if (!hasPendingEntry) {
+    fs.appendFileSync(gitignorePath, (gitignoreContent.endsWith('\n') ? '' : '\n') + PENDING_ENTRY + '\n', 'utf8');
+    mark('update', '.gitignore (.memoc/.pending added)');
+  } else {
+    mark('skip', '.gitignore (.memoc/.pending already present)');
+  }
+}
+
+function printCommandHint() {
+  console.log('\n  Agent command fallback:');
+  console.log('    memoc summary');
+  console.log('    .\\.memoc\\bin\\memoc.cmd summary   # Windows');
+  console.log('    .memoc/bin/memoc summary          # macOS/Linux sh');
+  console.log('  If PATH fails once, use the project-local wrapper for the rest of the session.');
+}
 
 function applyManagedBlock(filePath, tplFn) {
   if (!fs.existsSync(filePath)) {
@@ -1229,14 +1339,13 @@ function applyManagedBlock(filePath, tplFn) {
     return 'add';
   }
   const src = fs.readFileSync(filePath, 'utf8');
-  const s = src.indexOf(MGMT_S);
-  const e = src.indexOf(MGMT_E);
-  if (s === -1 || e === -1) {
+  const range = findMarkedRange(src, MGMT_S, MGMT_E);
+  if (!range) {
     // No managed block — inject at end, preserving all user content
     write(filePath, src.trimEnd() + '\n\n' + managedBlock() + '\n');
     return 'inject';
   }
-  write(filePath, src.slice(0, s) + managedBlock() + src.slice(e + MGMT_E.length));
+  write(filePath, src.slice(0, range.s) + managedBlock() + src.slice(range.e + range.endMark.length));
   return 'update';
 }
 
@@ -1244,7 +1353,7 @@ function applyManagedBlock(filePath, tplFn) {
 // MAIN RUNNER
 // ═══════════════════════════════════════════════════════════════════
 
-function run(dir, forceUpdate) {
+function run(dir, forceUpdate, action = 'update') {
   const p       = scanProject(dir);
   const memDir  = path.join(dir, '.memoc');
   const isNew   = !fs.existsSync(path.join(memDir, 'boot.md'));
@@ -1288,7 +1397,7 @@ function run(dir, forceUpdate) {
       [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
       [path.join(memDir, '06-project-rules.md'),       tplProjectRules],
       [path.join(memDir, 'log.md'),                    tplLog],
-      [path.join(memDir, 'memoc-usage.md'),    tplContextForgeUsage],
+      [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
       [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
       [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
@@ -1306,28 +1415,10 @@ function run(dir, forceUpdate) {
     }
 
     // Claude Code Stop hook — writes .memoc/.pending when git detects changes
-    const claudeDir      = path.join(dir, '.claude');
-    const claudeSettings = path.join(claudeDir, 'settings.json');
-    fs.mkdirSync(claudeDir, { recursive: true });
-    if (!fs.existsSync(claudeSettings)) {
-      write(claudeSettings, tplClaudeSettings());
-      mark('add', '.claude/settings.json');
-    } else {
-      const merged = ensureClaudeStopHook(claudeSettings);
-      mark(merged ? 'update' : 'skip', `.claude/settings.json (Stop hook ${merged ? 'merged' : 'already present'})`);
-    }
+    ensureClaudeStopHookFile(dir, mark);
 
     // .gitignore — add .memoc/.pending if not already present
-    const gitignorePath = path.join(dir, '.gitignore');
-    const PENDING_ENTRY = '.memoc/.pending';
-    const gitignoreContent = fs.existsSync(gitignorePath)
-      ? fs.readFileSync(gitignorePath, 'utf8') : '';
-    if (!gitignoreContent.includes(PENDING_ENTRY)) {
-      fs.appendFileSync(gitignorePath, (gitignoreContent.endsWith('\n') ? '' : '\n') + PENDING_ENTRY + '\n', 'utf8');
-      mark('update', '.gitignore (.memoc/.pending added)');
-    } else {
-      mark('skip', '.gitignore (.memoc/.pending already present)');
-    }
+    ensurePendingGitignore(dir, mark);
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensurePathHelpers(dir, mark);
@@ -1335,7 +1426,7 @@ function run(dir, forceUpdate) {
 
   } else {
     // ── UPDATE MODE
-    console.log(`\n  memoc update — ${path.basename(dir)}`);
+    console.log(`\n  memoc ${action} — ${path.basename(dir)}`);
     console.log(`  Re-scanning project: ${p.isEmpty ? 'nothing detected' : stackStr(p.stack)}`);
     console.log();
 
@@ -1404,7 +1495,7 @@ function run(dir, forceUpdate) {
       [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
       [path.join(memDir, '06-project-rules.md'),       tplProjectRules],
       [path.join(memDir, 'log.md'),                    tplLog],
-      [path.join(memDir, 'memoc-usage.md'),    tplContextForgeUsage],
+      [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
       [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
       [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
@@ -1423,6 +1514,8 @@ function run(dir, forceUpdate) {
     }
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
+    ensureClaudeStopHookFile(dir, mark);
+    ensurePendingGitignore(dir, mark);
     ensurePathHelpers(dir, mark);
     ensurePathRegistration(dir, mark);
 
@@ -1430,7 +1523,7 @@ function run(dir, forceUpdate) {
     const logPath = path.join(memDir, 'log.md');
     if (fs.existsSync(logPath)) {
       fs.appendFileSync(logPath,
-        `\n## [${nowISO()}] update | Re-scanned: ${p.isEmpty ? 'nothing detected' : stackStr(p.stack)}\n`,
+        `\n## [${nowISO()}] ${action} | Re-scanned: ${p.isEmpty ? 'nothing detected' : stackStr(p.stack)}\n`,
         'utf8'
       );
       mark('append', '.memoc/log.md');
@@ -1439,6 +1532,7 @@ function run(dir, forceUpdate) {
 
   hideOnWindows(memDir);
   console.log(log.join('\n'));
+  printCommandHint();
   console.log('\n  Done.');
 }
 
@@ -1520,7 +1614,7 @@ function runSearch(dir, scope = 'memory') {
         try {
           const st = fs.statSync(fp);
           if (st.isDirectory()) {
-            if (!shouldSkipSearchDir(entry)) collectDir(fp);
+            if (!shouldSkipSearchDir(entry, scope)) collectDir(fp);
           } else if (isSearchableFile(fp, entry, st, scope)) collectFile(fp);
         } catch {}
       }
@@ -1567,7 +1661,7 @@ function runSearch(dir, scope = 'memory') {
       try {
         const st = fs.statSync(fp);
         if (st.isDirectory()) {
-          if (!shouldSkipSearchDir(entry)) walkDir(fp);
+          if (!shouldSkipSearchDir(entry, scope)) walkDir(fp);
         } else if (isSearchableFile(fp, entry, st, scope)) searchFile(fp);
       } catch {}
     }
@@ -1585,7 +1679,12 @@ function runSearch(dir, scope = 'memory') {
   } else if (opts.mode === 'files') {
     const rows = [...matchesByFile.entries()]
       .map(([file, { matches, mtime }]) => ({ file, count: matches.length, mtime }))
-      .sort((a, b) => b.count - a.count || b.mtime - a.mtime || a.file.localeCompare(b.file));
+      .sort((a, b) =>
+        searchPriority(a.file, scope) - searchPriority(b.file, scope) ||
+        b.count - a.count ||
+        b.mtime - a.mtime ||
+        a.file.localeCompare(b.file)
+      );
     const limited = opts.all ? rows : rows.slice(0, opts.limit);
     console.log(limited.map(r => `${r.file}  ${r.count} match${r.count === 1 ? '' : 'es'}`).join('\n'));
     if (!opts.all && rows.length > limited.length) {
@@ -1594,10 +1693,15 @@ function runSearch(dir, scope = 'memory') {
   } else {
     const snippets = [];
     for (const [file, { matches }] of matchesByFile.entries()) {
-      for (const m of matches) snippets.push(`${file}:${m.line}  ${m.text}`);
+      for (const m of matches) snippets.push({ file, line: m.line, text: m.text });
     }
+    snippets.sort((a, b) =>
+      searchPriority(a.file, scope) - searchPriority(b.file, scope) ||
+      a.file.localeCompare(b.file) ||
+      a.line - b.line
+    );
     const limited = opts.all ? snippets : snippets.slice(0, opts.limit);
-    console.log(limited.join('\n'));
+    console.log(limited.map(m => `${m.file}:${m.line}  ${m.text}`).join('\n'));
     if (!opts.all && snippets.length > limited.length) {
       console.log(`... ${snippets.length - limited.length} more matches. Use --all to show all, or --limit N.`);
     }
@@ -1615,17 +1719,24 @@ function memorySearchRoots(dir) {
   ];
 }
 
-function shouldSkipSearchDir(name) {
-  return new Set([
+function shouldSkipSearchDir(name, scope = 'memory') {
+  const skipped = new Set([
     '.git', 'node_modules', '.next', 'dist', 'build', 'out', 'coverage',
     'Saved', 'Intermediate', 'DerivedDataCache', 'Binaries',
     '.venv', 'venv', '__pycache__', '.pytest_cache',
-  ]).has(name);
+  ]);
+  if (scope === 'project') {
+    skipped.add('.memoc');
+    skipped.add('skills');
+    skipped.add('.claude');
+  }
+  return skipped.has(name);
 }
 
 function isSearchableFile(fp, name, st, scope = 'memory') {
   if (!st || !st.isFile()) return false;
   if (st.size > 1024 * 1024) return false;
+  if (scope === 'project' && isAgentMemoryFile(name)) return false;
   if (name === 'llms.txt' || name.endsWith('rules')) return true;
   const ext = path.extname(fp).toLowerCase();
   if (scope === 'memory') {
@@ -1639,6 +1750,42 @@ function isSearchableFile(fp, name, st, scope = 'memory') {
     '.sql', '.graphql', '.gql', '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd',
     '.xml', '.gradle', '.kts', '.cmake',
   ]).has(ext);
+}
+
+function isAgentMemoryFile(name) {
+  return new Set([
+    'AGENTS.md',
+    'CLAUDE.md',
+    'GEMINI.md',
+    'llms.txt',
+    '.cursorrules',
+    '.windsurfrules',
+    'copilot-instructions.md',
+  ]).has(name);
+}
+
+function searchPriority(file, scope = 'memory') {
+  if (scope !== 'memory') return 0;
+  const normalized = file.replace(/\\/g, '/');
+  const order = [
+    '.memoc/session-summary.md',
+    '.memoc/02-current-project-state.md',
+    '.memoc/04-handoff.md',
+    '.memoc/06-project-rules.md',
+    '.memoc/03-decisions.md',
+    '.memoc/log.md',
+    'AGENTS.md',
+    'CLAUDE.md',
+    'llms.txt',
+    '.memoc/00-project-brief.md',
+    '.memoc/00-agent-index.md',
+  ];
+  const exact = order.indexOf(normalized);
+  if (exact !== -1) return exact;
+  if (normalized.startsWith('.memoc/systems/')) return 20;
+  if (normalized.startsWith('.memoc/wiki/')) return 30;
+  if (normalized.startsWith('skills/')) return 40;
+  return 50;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1813,6 +1960,7 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('Commands:');
   console.log('  init               Scaffold agent memory (auto-detects project, updates if already exists)');
   console.log('  update             Force-update managed sections based on current project state');
+  console.log('  upgrade            Refresh memoc runtime/wrappers and managed sections; preserve memory');
   console.log('  summary            Print a tiny status/resume overview');
   console.log('  tokens             Estimate token cost of current memory files');
   console.log('  compress           Archive old log.md entries to keep file small');
@@ -1829,8 +1977,9 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   process.exit(0);
 }
 
-if (cmd === 'init')     { run(cwd, false);    process.exit(0); }
-if (cmd === 'update')   { run(cwd, true);     process.exit(0); }
+if (cmd === 'init')     { run(cwd, false);             process.exit(0); }
+if (cmd === 'update')   { run(cwd, true, 'update');    process.exit(0); }
+if (cmd === 'upgrade')  { run(cwd, true, 'upgrade');   process.exit(0); }
 if (cmd === 'summary')  { runSummary(cwd);    process.exit(0); }
 if (cmd === 'tokens')   { runTokens(cwd);     process.exit(0); }
 if (cmd === 'compress') { runCompress(cwd);   process.exit(0); }

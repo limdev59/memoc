@@ -2,11 +2,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, execSync } = require('node:child_process');
 const test = require('node:test');
 
 const repoRoot = path.resolve(__dirname, '..');
 const cliPath = path.join(repoRoot, 'bin', 'cli.js');
+const pkg = require('../package.json');
 
 function withTempProject(fn) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'memoc-test-'));
@@ -16,6 +17,19 @@ function withTempProject(fn) {
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
+}
+
+function commandArg(arg) {
+  if (process.platform === 'win32') return `"${String(arg).replace(/"/g, '""')}"`;
+  return `'${String(arg).replace(/'/g, `'\\''`)}'`;
+}
+
+function runLocalMemoc(dir, args, env = process.env) {
+  const localBin = path.join(dir, '.memoc', 'bin', process.platform === 'win32' ? 'memoc.cmd' : 'memoc');
+  if (process.platform === 'win32') {
+    return execSync([commandArg(localBin), ...args.map(commandArg)].join(' '), { cwd: dir, encoding: 'utf8', env });
+  }
+  return execFileSync(localBin, args, { cwd: dir, encoding: 'utf8', env });
 }
 
 test('init creates PATH helpers and teaches agents command fallbacks', () => {
@@ -37,11 +51,13 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
 
     const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
     assert.match(output, /PATH registration/);
-    assert.match(agents, /Run memoc commands in this order/);
-    assert.match(agents, /`memoc search "<query>"`/);
-    assert.match(agents, /`\.\\\.memoc\\bin\\memoc\.cmd search "<query>"`/);
-    assert.match(agents, /`\.memoc\/bin\/memoc search "<query>"`/);
-    assert.match(agents, /`npx @kevin0181\/memoc search "<query>"`/);
+    assert.match(output, /Agent command fallback/);
+    assert.match(output, /\.\\\.memoc\\bin\\memoc\.cmd summary/);
+    assert.match(output, /\.memoc\/bin\/memoc summary/);
+    assert.match(agents, /Search memory first/);
+    assert.match(agents, /`memoc search "<query>" --limit 5`/);
+    assert.match(agents, /`\.\\\.memoc\\bin\\memoc\.cmd <command>`/);
+    assert.match(agents, /`\.memoc\/bin\/memoc <command>`/);
 
     assert.ok(fs.existsSync(path.join(dir, '.memoc', 'env.ps1')));
     assert.ok(fs.existsSync(path.join(dir, '.memoc', 'env.sh')));
@@ -58,6 +74,205 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc')));
+  });
+});
+
+test('project-local memoc launcher runs commands agents are told to use', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    assert.equal(runLocalMemoc(dir, ['--version'], env).trim(), pkg.version);
+    fs.appendFileSync(path.join(dir, '.memoc', 'session-summary.md'), '\n- auth token refresh pending\n', 'utf8');
+    const output = runLocalMemoc(dir, ['search', 'auth', '--snippets', '--limit', '3'], env);
+    assert.match(output, /\.memoc[\\/]session-summary\.md/);
+    assert.match(output, /auth token refresh pending/);
+  });
+});
+
+test('init writes memoc markers and does not duplicate managed blocks', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+    assert.equal((agents.match(/<!-- memoc:managed:start -->/g) || []).length, 1);
+    assert.equal((agents.match(/<!-- memoc:managed:end -->/g) || []).length, 1);
+    assert.doesNotMatch(agents, /context-forge:managed/);
+  });
+});
+
+test('init migrates legacy context-forge markers without duplicating blocks', () => {
+  withTempProject(dir => {
+    fs.writeFileSync(
+      path.join(dir, 'AGENTS.md'),
+      [
+        '# Existing Agent Notes',
+        '',
+        '<!-- context-forge:managed:start -->',
+        'legacy managed block',
+        '<!-- context-forge:managed:end -->',
+        '',
+        'User-owned notes stay here.',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        MEMOC_SKIP_PATH_REGISTER: '1',
+        MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+        MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      },
+    });
+
+    const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+    assert.equal((agents.match(/<!-- memoc:managed:start -->/g) || []).length, 1);
+    assert.equal((agents.match(/<!-- memoc:managed:end -->/g) || []).length, 1);
+    assert.doesNotMatch(agents, /context-forge:managed/);
+    assert.match(agents, /User-owned notes stay here/);
+  });
+});
+
+test('init installs a cross-platform Claude hook and migrates old memoc hooks', () => {
+  withTempProject(dir => {
+    const claudeDir = path.join(dir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(
+      path.join(claudeDir, 'settings.json'),
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              matcher: '',
+              hooks: [
+                { type: 'command', command: 'echo keep-me' },
+                { type: 'command', command: "node -e \"fs.writeFileSync('.memoc/.pending','x'); git status --porcelain\" 2>/dev/null || true" },
+              ],
+            },
+          ],
+        },
+      }, null, 2),
+      'utf8'
+    );
+
+    execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        MEMOC_SKIP_PATH_REGISTER: '1',
+        MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+        MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      },
+    });
+
+    const settings = JSON.parse(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8'));
+    const commands = settings.hooks.Stop.flatMap(entry => entry.hooks || []).map(h => h.command);
+    const memocHooks = commands.filter(command => command.includes('.memoc/.pending'));
+    assert.equal(memocHooks.length, 1);
+    assert.match(memocHooks[0], /execFileSync\('git',\['status','--porcelain'\]/);
+    assert.doesNotMatch(memocHooks[0], /2>\/dev\/null|\|\| true/);
+    assert.ok(commands.includes('echo keep-me'));
+  });
+});
+
+test('update mode refreshes Claude hook and pending gitignore entry', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const settingsPath = path.join(dir, '.claude', 'settings.json');
+    fs.writeFileSync(
+      settingsPath,
+      JSON.stringify({
+        hooks: {
+          Stop: [{ matcher: '', hooks: [{ type: 'command', command: "node -e \"fs.writeFileSync('.memoc/.pending','x'); git status --porcelain\" 2>/dev/null || true" }] }],
+        },
+      }, null, 2),
+      'utf8'
+    );
+    fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n.memoc/.pending-old\n', 'utf8');
+
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const settings = JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+    const commands = settings.hooks.Stop.flatMap(entry => entry.hooks || []).map(h => h.command);
+    const memocHooks = commands.filter(command => command.includes('.memoc/.pending'));
+    assert.equal(memocHooks.length, 1);
+    assert.doesNotMatch(memocHooks[0], /2>\/dev\/null|\|\| true/);
+    assert.match(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), /^\.memoc\/\.pending$/m);
+  });
+});
+
+test('upgrade refreshes runtime while preserving existing memory', () => {
+  withTempProject(dir => {
+    const runtimeDir = path.join(dir, 'fake-runtime');
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: runtimeDir,
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+    const decisionsPath = path.join(dir, '.memoc', '03-decisions.md');
+    fs.writeFileSync(summaryPath, '# Session Summary\n\n## Status\n- keep this memory\n', 'utf8');
+    fs.appendFileSync(decisionsPath, '\n## 2026-05-20\n- Preserve user decisions.\n', 'utf8');
+    fs.writeFileSync(path.join(runtimeDir, 'package.json'), JSON.stringify({ version: '0.0.1' }), 'utf8');
+
+    const output = execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
+
+    assert.match(output, /memoc upgrade/);
+    assert.match(fs.readFileSync(summaryPath, 'utf8'), /keep this memory/);
+    assert.match(fs.readFileSync(decisionsPath, 'utf8'), /Preserve user decisions/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')).version, pkg.version);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8'), /upgrade \| Re-scanned/);
+  });
+});
+
+test('init tolerates malformed Claude hook settings', () => {
+  withTempProject(dir => {
+    const claudeDir = path.join(dir, '.claude');
+    fs.mkdirSync(claudeDir, { recursive: true });
+    fs.writeFileSync(path.join(claudeDir, 'settings.json'), JSON.stringify({ hooks: 'bad shape' }), 'utf8');
+
+    execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        MEMOC_SKIP_PATH_REGISTER: '1',
+        MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+        MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      },
+    });
+
+    const settings = JSON.parse(fs.readFileSync(path.join(claudeDir, 'settings.json'), 'utf8'));
+    assert.ok(Array.isArray(settings.hooks.Stop));
+    assert.equal(settings.hooks.Stop.flatMap(entry => entry.hooks || []).filter(h => h.command.includes('.memoc/.pending')).length, 1);
   });
 });
 
@@ -110,6 +325,7 @@ test('search stays memory-scoped while grep finds source code matches', () => {
     assert.match(memoryOutput, /\.memoc[\\/]session-summary\.md:1/);
     assert.doesNotMatch(memoryOutput, /src[\\/]particles\.cpp/);
     assert.match(projectOutput, /src[\\/]particles\.cpp:1/);
+    assert.doesNotMatch(projectOutput, /\.memoc[\\/]session-summary\.md/);
     assert.match(projectOutput, /GetParticles/);
   });
 });
