@@ -44,8 +44,10 @@ If you are giving this repo or npm package to an AI coding agent, use a prompt l
 ```text
 Install memoc in this project and run init.
 Use npm/npx if available. If npm is missing but node is available, clone or download
-https://github.com/neneee0181/memoc and run `node <memoc-repo>/bin/cli.js init`
-from this project's root. After init, verify with the project-local wrapper:
+https://github.com/neneee0181/memoc into a temp directory outside this project,
+then run `node <temp-memoc-repo>/bin/cli.js init` from this project's root.
+Do not clone memoc into this project and do not commit the temporary memoc source.
+After init, verify with the project-local wrapper:
 Windows: .\.memoc\bin\memoc.cmd summary
 macOS/Linux: .memoc/bin/memoc summary
 ```
@@ -54,13 +56,23 @@ Agent install checklist:
 
 1. Run `node --version`. If Node.js is missing, ask the user to install Node.js LTS first.
 2. Run `npx @kevin0181/memoc init` from the target project root.
-3. If `npx` or `npm` is missing, use GitHub source instead:
+3. If `npx` or `npm` is missing, use GitHub source from a temp directory outside the target project:
    ```bash
-   git clone https://github.com/neneee0181/memoc.git
-   node /path/to/memoc/bin/cli.js init
+   tmp="$(mktemp -d)"
+   git clone --depth 1 https://github.com/neneee0181/memoc.git "$tmp/memoc"
+   node "$tmp/memoc/bin/cli.js" init
+   rm -rf "$tmp"
    ```
-4. If `git` is missing too, download the GitHub ZIP, extract it, then run `node /path/to/memoc/bin/cli.js init`.
-5. After init, do not depend on global PATH. Use the project-local wrapper when needed:
+4. On Windows PowerShell without npm, use a temp directory too:
+   ```powershell
+   $tmp = Join-Path $env:TEMP ("memoc-" + [guid]::NewGuid())
+   git clone --depth 1 https://github.com/neneee0181/memoc.git $tmp
+   node "$tmp\bin\cli.js" init
+   Remove-Item -LiteralPath $tmp -Recurse -Force
+   ```
+5. If `git` is missing too, download the GitHub ZIP outside the target project, extract it, then run `node /path/to/memoc/bin/cli.js init`. Delete the extracted memoc source after init.
+6. Do not commit temporary installer sources, downloaded ZIPs, or a cloned `memoc/` directory. `.claude/settings.json` is intentionally generated for the Claude Code Stop hook; keep or commit it only if the project wants that hook.
+7. After init, do not depend on global PATH. Use the project-local wrapper when needed:
    - Windows: `.\.memoc\bin\memoc.cmd <command>`
    - macOS/Linux: `.memoc/bin/memoc <command>`
 
