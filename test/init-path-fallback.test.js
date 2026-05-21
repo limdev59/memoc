@@ -255,7 +255,7 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     assert.match(fs.readFileSync(summaryPath, 'utf8'), /keep this memory/);
     assert.match(fs.readFileSync(decisionsPath, 'utf8'), /Preserve user decisions/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')).version, pkg.version);
-    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8'), /upgrade \| Re-scanned/);
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8'), /upgrade \| Re-scanned/);
   });
 });
 
@@ -550,14 +550,13 @@ test('trim-summary archives oversized startup summary and rewrites compact snaps
 
     const compact = fs.readFileSync(summaryPath, 'utf8');
     const archive = fs.readFileSync(path.join(dir, '.memoc', 'session-summary-archive.md'), 'utf8');
-    const log = fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8');
 
     assert.match(output, /memoc trim-summary/);
     assert.ok(Buffer.byteLength(compact, 'utf8') < 1200);
     assert.equal((compact.match(/status detail/g) || []).length, 3);
     assert.equal((compact.match(/changed detail/g) || []).length, 3);
     assert.match(archive, /status detail 11/);
-    assert.match(log, /trim-summary \| Archived oversized session summary/);
+    assert.match(archive, /archived summary/);
   });
 });
 
@@ -638,6 +637,7 @@ test('actor commands use local override and work creates conflict-light activity
       MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
     };
     execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    execFileSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
 
     execFileSync(process.execPath, [cliPath, 'actor', 'set', 'neneee'], { cwd: dir, encoding: 'utf8', env });
     const actorOutput = execFileSync(process.execPath, [cliPath, 'actor'], { cwd: dir, encoding: 'utf8', env });
@@ -646,7 +646,8 @@ test('actor commands use local override and work creates conflict-light activity
     assert.equal(fs.readFileSync(path.join(dir, '.memoc', 'local', 'actor'), 'utf8').trim(), 'neneee');
     assert.match(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), /\.memoc\/local\//);
 
-    const workOutput = execFileSync(process.execPath, [cliPath, 'work', 'Auth refresh fix', '--body', 'Fixed token refresh state.'], {
+    fs.writeFileSync(path.join(dir, 'src.js'), 'console.log("changed");\n', 'utf8');
+    const workOutput = execFileSync(process.execPath, [cliPath, 'work', 'Auth refresh fix', '--from-git', '--body', 'Fixed token refresh state.'], {
       cwd: dir,
       encoding: 'utf8',
       env,
@@ -663,14 +664,17 @@ test('actor commands use local override and work creates conflict-light activity
     assert.match(work, /  - memoc\/worklog/);
     assert.match(work, /actor: neneee/);
     assert.match(work, /Fixed token refresh state/);
+    assert.match(work, /`src\.js`/);
 
     const actorProfile = fs.readFileSync(path.join(dir, '.memoc', 'actors', 'neneee.md'), 'utf8');
     assert.match(actorProfile, /type: actor/);
     assert.match(actorProfile, /  - memoc\/actor/);
 
-    const activity = execFileSync(process.execPath, [cliPath, 'activity'], { cwd: dir, encoding: 'utf8', env });
+    const activity = execFileSync(process.execPath, [cliPath, 'activity', '--write'], { cwd: dir, encoding: 'utf8', env });
     assert.match(activity, /Auth refresh fix/);
     assert.match(activity, /neneee/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'activity.md'), 'utf8'), /Auth refresh fix/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'worklog', 'README.md'), 'utf8'), /Auth refresh fix/);
   });
 });
 
@@ -690,5 +694,23 @@ test('actor falls back to git config when local actor is unset', () => {
     const actorOutput = execFileSync(process.execPath, [cliPath, 'actor'], { cwd: dir, encoding: 'utf8', env });
     assert.match(actorOutput, /Actor\s+jane-doe/);
     assert.match(actorOutput, /git config user\.name/);
+  });
+});
+
+test('doctor reports oversized summaries and user-specific wrapper paths', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    fs.writeFileSync(path.join(dir, '.memoc', 'session-summary.md'), `# Session Summary\n\n${'x'.repeat(1000)}\n`, 'utf8');
+    fs.writeFileSync(path.join(dir, '.memoc', 'bin', 'memoc'), "#!/bin/sh\nexec node '/Users/neneee/.local/share/memoc/runtime/bin/cli.js' \"$@\"\n", 'utf8');
+
+    const output = execFileSync(process.execPath, [cliPath, 'doctor'], { cwd: dir, encoding: 'utf8', env });
+    assert.match(output, /session-summary\.md exceeds 800B/);
+    assert.match(output, /user-specific runtime path/);
   });
 });

@@ -85,8 +85,10 @@ npx @kevin0181/memoc update
 # Shared repo activity tracking
 npx @kevin0181/memoc actor
 npx @kevin0181/memoc actor set neneee
-npx @kevin0181/memoc work "Auth refresh fix"
+npx @kevin0181/memoc work "Auth refresh fix" --from-git
 npx @kevin0181/memoc activity
+npx @kevin0181/memoc activity --write
+npx @kevin0181/memoc doctor
 
 # Print current status in ~10 lines
 npx @kevin0181/memoc summary
@@ -256,7 +258,7 @@ Running `update` refreshes managed blocks in all existing agent files.
 
 ## Shared Repos
 
-Use `memoc work "<title>"` for meaningful work in shared repositories. It creates a new actor-scoped file under `.memoc/worklog/YYYY-MM/`, which avoids many append conflicts in shared files like `log.md`.
+Use `memoc work "<title>" --from-git` for meaningful work in shared repositories. It creates a new actor-scoped file under `.memoc/worklog/YYYY-MM/`, prefills branch and changed files from git, and avoids append conflicts in shared files like `log.md`.
 
 Actor detection order:
 
@@ -267,6 +269,8 @@ Actor detection order:
 5. OS username
 
 `.memoc/local/` is ignored by git so each machine can keep its own actor setting.
+
+`activity.md`, `actors/README.md`, and `worklog/README.md` are regenerated indexes. Run `memoc activity --write` when you want to refresh them from worklog files.
 
 ---
 

@@ -277,6 +277,22 @@ function gitBranch(dir) {
   }
 }
 
+function gitStatusFiles(dir) {
+  try {
+    const out = require('child_process')
+      .execFileSync('git', ['status', '--short'], { cwd: dir, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .trim();
+    if (!out) return [];
+    return out.split(/\r?\n/)
+      .map(line => line.slice(3).trim())
+      .filter(Boolean)
+      .filter(file => !file.startsWith('.memoc/worklog/') && !file.startsWith('.memoc/activity.md'))
+      .slice(0, 12);
+  } catch {
+    return [];
+  }
+}
+
 function tplMemocCmdWrapper() {
   return [
     '@echo off',
@@ -732,7 +748,7 @@ function managedBlock() {
 - [ ] Rule/preference set? Update \`06-project-rules.md\`
 - [ ] Wiki/systems work? Read \`skills/project-memory-maintainer/SKILL.md\`
 - [ ] User asked to update memoc/project memory? Run \`memoc update\`, then update the smallest relevant agent-owned memory files.
-- [ ] Shared repo work? Prefer a new \`.memoc/worklog/YYYY-MM/*.md\` entry over appending shared files; keep shared files as small summaries.
+- [ ] Shared repo work? Prefer \`memoc work "<title>" --from-git\` over appending shared files; run \`memoc activity --write\` only when regenerating indexes.
 - [ ] Keep \`session-summary.md\` as a replace-only snapshot under 800B; move completed history to \`log.md\` and resume details to \`04-handoff.md\`. If it grew, run \`memoc trim-summary\`.
 ${MGMT_E}`;
 }
@@ -987,7 +1003,7 @@ function mergeYamlFrontmatter(src, spec) {
   mergeYamlTags(nextLines, mergedTags);
 
   const nextFm = ['---', ...nextLines, '---'].join('\n');
-  return nextFm + rest;
+  return `${nextFm}\n${rest.replace(/^\r?\n/, '')}`;
 }
 
 function parseYamlFrontmatter(src) {
@@ -1572,8 +1588,10 @@ memoc trim-summary
 # Shared repo actor/work tracking
 memoc actor
 memoc actor set neneee
-memoc work "Auth refresh fix"
+memoc work "Auth refresh fix" --from-git
 memoc activity
+memoc activity --write
+memoc doctor
 
 # Tiny status overview
 memoc summary
@@ -1609,7 +1627,9 @@ Raw files under \`.memoc/raw/\` are intentionally not part of normal memory sear
 
 ## Shared Repo Activity
 
-Use \`memoc work "<title>"\` to create conflict-light activity records under \`.memoc/worklog/YYYY-MM/\`. Actor is detected in this order: \`MEMOC_ACTOR\`, \`.memoc/local/actor\`, \`git config user.name\`, \`git config user.email\`, OS username. Use \`memoc actor set <name>\` to store a local actor name without committing it.
+Use \`memoc work "<title>" --from-git\` to create conflict-light activity records under \`.memoc/worklog/YYYY-MM/\`. The command prefills actor, branch, timestamp, and changed files from git so agents only need to fill short Summary/Verification notes when useful. Actor is detected in this order: \`MEMOC_ACTOR\`, \`.memoc/local/actor\`, \`git config user.name\`, \`git config user.email\`, OS username. Use \`memoc actor set <name>\` to store a local actor name without committing it.
+
+\`.memoc/activity.md\`, \`.memoc/worklog/README.md\`, and \`.memoc/actors/README.md\` are regenerated indexes. Run \`memoc activity --write\` to rebuild them from worklog/actor files instead of appending to them during every task.
 
 ## When To Run Memory Updates
 
@@ -1970,12 +1990,12 @@ Use this local skill after meaningful project work so future agents can continue
 - Create or update \`.memoc/systems/*.md\` when a subsystem needs durable explanation.
 - Create or update \`.memoc/wiki/*.md\` when synthesized knowledge should compound over time.
 - Use \`memoc ingest <path-or-url>\` for source material and \`memoc note "<title>"\` for durable query results or analysis.
-- Use \`memoc work "<title>"\` for meaningful shared-repo work so details are saved in actor-scoped worklog files instead of causing shared-file conflicts.
+- Use \`memoc work "<title>" --from-git\` for meaningful shared-repo work so details are saved in actor-scoped worklog files instead of causing shared-file conflicts.
 - Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, add relative Markdown links between related pages, and include a \`## Related\` section on every new wiki page.
 - Run \`memoc lint-wiki\` after wiki/source/topic edits and address broken links before finishing.
 - Keep completed history in \`.memoc/log.md\`; keep current-state files short.
 - Move completed session details out of \`session-summary.md\` into \`log.md\`; move incomplete/risky resume details into \`04-handoff.md\`.
-- In shared repos, avoid long appends to \`log.md\`; prefer new files under \`.memoc/worklog/YYYY-MM/\` and keep \`.memoc/activity.md\` as a short index.
+- In shared repos, avoid appends to \`log.md\`; prefer new files under \`.memoc/worklog/YYYY-MM/\` and regenerate \`.memoc/activity.md\` with \`memoc activity --write\`.
 - Keep tool output small; prefer \`summary\`, file-only search, \`--limit\`, and targeted reads.
 
 ## Wiki Link Rules
@@ -2314,15 +2334,7 @@ function run(dir, forceUpdate, action = 'update') {
     ensurePathHelpers(dir, mark);
     ensurePathRegistration(dir, mark);
 
-    // Append update record to log.md
-    const logPath = path.join(memDir, 'log.md');
-    if (fs.existsSync(logPath)) {
-      fs.appendFileSync(logPath,
-        `\n## [${nowISO()}] ${action} | Re-scanned: ${p.isEmpty ? 'nothing detected' : stackStr(p.stack)}\n`,
-        'utf8'
-      );
-      mark('append', '.memoc/log.md');
-    }
+    mark('skip', '.memoc/log.md (shared history now belongs in worklog)');
   }
 
   hideOnWindows(memDir);
@@ -2392,7 +2404,7 @@ function runActor(dir) {
 
 function runWork(dir) {
   const rawArgs = process.argv.slice(3);
-  const opts = { status: 'done', body: '' };
+  const opts = { status: 'done', body: '', fromGit: true };
   const titleParts = [];
   for (let i = 0; i < rawArgs.length; i++) {
     const arg = rawArgs[i];
@@ -2408,12 +2420,20 @@ function runWork(dir) {
       opts.body = rawArgs.slice(i + 1).join(' ');
       break;
     }
+    if (arg === '--from-git') {
+      opts.fromGit = true;
+      continue;
+    }
+    if (arg === '--no-git') {
+      opts.fromGit = false;
+      continue;
+    }
     titleParts.push(arg);
   }
 
   const title = titleParts.join(' ').trim();
   if (!title) {
-    console.error('\n  Usage: memoc work "<title>" [--status done|wip|blocked] [--body "summary"]');
+    console.error('\n  Usage: memoc work "<title>" [--status done|wip|blocked] [--from-git|--no-git] [--body "summary"]');
     process.exit(1);
   }
 
@@ -2426,37 +2446,42 @@ function runWork(dir) {
   const workPath = uniquePath(path.join(dir, '.memoc', 'worklog', month, fileName));
   write(workPath, worklogRecord(dir, title, detected, opts));
   ensureMemocFrontmatter(workPath, dir);
-  addWikiListItem(path.join(dir, '.memoc', 'worklog', 'README.md'), 'Recent Work', pathRelativeMarkdown(path.join(dir, '.memoc', 'worklog'), workPath), title, `${detected.actor} ${opts.status}`);
-  addWikiListItem(path.join(dir, '.memoc', 'activity.md'), 'Recent Work', pathRelativeMarkdown(path.join(dir, '.memoc'), workPath), title, `${detected.actor} ${opts.status}`);
 
   console.log('\n  memoc work\n');
   console.log(`    Actor   ${detected.actor} (${detected.source})`);
   console.log(`    Work    ${normRel(dir, workPath)}`);
-  console.log('    Next    Keep shared summary files short; link this worklog if details matter.');
+  console.log('    Next    Fill only Summary/Verification if needed; run `memoc activity --write` to regenerate indexes.');
   console.log();
 }
 
 function runActivity(dir) {
+  const writeIndex = process.argv.slice(3).includes('--write');
   const workRoot = path.join(dir, '.memoc', 'worklog');
   const files = listMarkdownFiles(workRoot)
     .filter(fp => path.basename(fp) !== 'README.md')
     .sort()
-    .slice(-20)
     .reverse();
+  const recent = files.slice(0, 20);
+
+  if (writeIndex) {
+    writeActivityIndexes(dir, recent);
+    ensureObsidianFrontmatter(dir, () => {});
+  }
 
   console.log('\n  memoc activity\n');
-  if (!files.length) {
+  if (!recent.length) {
     console.log('    No worklog entries yet. Use `memoc work "<title>`.');
     console.log();
     return;
   }
-  for (const fp of files) {
+  for (const fp of recent) {
     const src = safeRead(fp);
     const title = markdownTitle(src, path.basename(fp, '.md'));
     const actor = (src.match(/^actor:\s*(.+)$/m) || [])[1] || 'unknown';
     const status = (src.match(/^status:\s*(.+)$/m) || [])[1] || 'unknown';
     console.log(`    - ${normRel(dir, fp)}  ${actor}  ${status}  ${title}`);
   }
+  if (writeIndex) console.log('\n    Wrote .memoc/activity.md and .memoc/worklog/README.md');
   console.log();
 }
 
@@ -2465,7 +2490,6 @@ function ensureActorProfile(dir, detected) {
   if (fs.existsSync(actorPath)) return;
   write(actorPath, actorProfile(detected));
   ensureMemocFrontmatter(actorPath, dir);
-  addWikiListItem(path.join(dir, '.memoc', 'actors', 'README.md'), 'Actors', `${detected.actor}.md`, detected.actor, `detected from ${detected.source}`);
 }
 
 function actorProfile(detected) {
@@ -2491,6 +2515,7 @@ _Add stable collaboration preferences or ownership notes only when useful._
 
 function worklogRecord(dir, title, detected, opts) {
   const branch = gitBranch(dir);
+  const changedFiles = opts.fromGit ? gitStatusFiles(dir) : [];
   return `# ${title}
 
 actor: ${detected.actor}
@@ -2501,15 +2526,15 @@ created: ${nowISO()}
 
 ## Summary
 
-${opts.body ? `- ${opts.body}` : '_What changed, in 1-5 bullets._'}
+${opts.body ? `- ${opts.body}` : '_1-3 bullets only. Keep this as a short receipt, not a report._'}
 
 ## Changed Files
 
-_List important files or leave blank if unknown._
+${changedFiles.length ? changedFiles.map(file => `- \`${file}\``).join('\n') : '_None detected. Use `memoc work "<title>" --from-git` after editing files to prefill this section._'}
 
 ## Verification
 
-_Commands run or checks not run._
+_Commands run or checks not run. Keep to 1-3 bullets._
 
 ## Follow-up
 
@@ -2521,6 +2546,81 @@ _None._
 - [Worklog](../README.md)
 - [Actor](../../actors/${detected.actor}.md)
 `;
+}
+
+function writeActivityIndexes(dir, recentFiles) {
+  const activityPath = path.join(dir, '.memoc', 'activity.md');
+  const worklogReadme = path.join(dir, '.memoc', 'worklog', 'README.md');
+  const actorsReadme = path.join(dir, '.memoc', 'actors', 'README.md');
+  const rows = recentFiles.map(fp => {
+    const src = safeRead(fp);
+    const title = markdownTitle(src, path.basename(fp, '.md'));
+    const actor = (src.match(/^actor:\s*(.+)$/m) || [])[1] || 'unknown';
+    const status = (src.match(/^status:\s*(.+)$/m) || [])[1] || 'unknown';
+    return { fp, title, actor, status };
+  });
+  const activityItems = rows.length
+    ? rows.map(row => `- [${row.title}](${pathRelativeMarkdown(path.join(dir, '.memoc'), row.fp).replace(/^\.\//, '')}) — ${row.actor} ${row.status}.`).join('\n')
+    : '_None yet._';
+  write(activityPath, `# Activity
+
+Generated shared activity index for memoc work logs.
+
+Last generated: ${nowISO()}
+
+## Recent Work
+
+${activityItems}
+
+## Related
+
+- [Actors](actors/README.md)
+- [Worklog](worklog/README.md)
+`);
+
+  const worklogItems = rows.length
+    ? rows.map(row => `- [${row.title}](${pathRelativeMarkdown(path.join(dir, '.memoc', 'worklog'), row.fp).replace(/^\.\//, '')}) — ${row.actor} ${row.status}.`).join('\n')
+    : '_None yet._';
+  write(worklogReadme, `# Worklog
+
+Generated index of conflict-light per-actor work records.
+
+Last generated: ${nowISO()}
+
+## Rules
+
+- Prefer creating new worklog files over appending shared core memory files.
+- Keep worklog entries short: 1-3 summary bullets, key files, verification.
+
+## Recent Work
+
+${worklogItems}
+`);
+
+  const actorFiles = listMarkdownFiles(path.join(dir, '.memoc', 'actors'))
+    .filter(fp => path.basename(fp) !== 'README.md')
+    .sort();
+  const actorItems = actorFiles.length
+    ? actorFiles.map(fp => `- [${markdownTitle(safeRead(fp), path.basename(fp, '.md'))}](${path.basename(fp)})`).join('\n')
+    : '_None yet. Use `memoc actor set <name>` or `memoc work "<title>"`._';
+  write(actorsReadme, `# Actors
+
+Generated actor index for this shared repo.
+
+## Actor Detection
+
+1. \`MEMOC_ACTOR\`
+2. \`.memoc/local/actor\` set by \`memoc actor set <name>\`
+3. \`git config user.name\`
+4. \`git config user.email\`
+5. OS username
+
+\`.memoc/local/\` is ignored by git so each machine can keep its own actor setting.
+
+## Actors
+
+${actorItems}
+`);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2646,8 +2746,6 @@ function runIngest(dir) {
   addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'Source Records', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'needs synthesis');
   addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources', 'README.md'), 'Source Records', path.basename(sourcePath), title, 'source record');
   addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Pages', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'source record');
-  appendMemocLog(dir, `ingest | Added source record ${normRel(dir, sourcePath)} from ${isUrl ? target : normRel(dir, path.resolve(dir, target))}.`);
-
   console.log('\n  memoc ingest\n');
   console.log(`    Source record  ${normRel(dir, sourcePath)}`);
   console.log(`    Raw reference  ${rawDisplay}`);
@@ -2676,8 +2774,6 @@ function runNote(dir) {
   ensureMemocFrontmatter(topicPath, dir);
   addWikiListItem(path.join(dir, '.memoc', 'wiki', 'topics', 'README.md'), 'Topic Pages', path.basename(topicPath), title, 'topic note');
   addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Saved Queries', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), topicPath), title, 'saved query/topic note');
-  appendMemocLog(dir, `note | Saved wiki topic ${normRel(dir, topicPath)}.`);
-
   console.log('\n  memoc note\n');
   console.log(`    Topic  ${normRel(dir, topicPath)}`);
   console.log('    Next   Link related sources/topics, then run memoc lint-wiki.');
@@ -3140,6 +3236,55 @@ function runTokens(dir) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// DOCTOR — quick health checks for shared memoc repos
+// ═══════════════════════════════════════════════════════════════════
+
+function runDoctor(dir) {
+  const issues = [];
+  const warnings = [];
+  const memDir = path.join(dir, '.memoc');
+  const summaryPath = path.join(memDir, 'session-summary.md');
+  const summary = safeRead(summaryPath);
+  if (!summary) issues.push('Missing .memoc/session-summary.md');
+  else if (Buffer.byteLength(summary, 'utf8') > 800) warnings.push('session-summary.md exceeds 800B; run memoc trim-summary');
+
+  for (const fp of [
+    path.join(dir, '.memoc', 'bin', 'memoc'),
+    path.join(dir, '.memoc', 'bin', 'memoc.cmd'),
+    path.join(dir, '.memoc', 'bin', 'memoc.ps1'),
+  ]) {
+    const src = safeRead(fp);
+    if (src && (/C:\\Users\\|\/Users\/[^/]+\/\.local\/share\/memoc\/runtime/.test(src))) {
+      issues.push(`${normRel(dir, fp)} contains a user-specific runtime path; run memoc upgrade`);
+    }
+  }
+
+  for (const fp of collectMemocMarkdownFiles(dir)) {
+    const src = safeRead(fp);
+    const fenceCount = (src.match(/^---$/gm) || []).length;
+    if (fenceCount > 2) warnings.push(`${normRel(dir, fp)} may have nested frontmatter; run memoc upgrade`);
+  }
+
+  const actor = detectActor(dir);
+  if (actor.actor === 'unknown') warnings.push('Actor could not be detected; run memoc actor set <name>');
+
+  console.log('\n  memoc doctor\n');
+  console.log(`    Actor    ${actor.actor} (${actor.source})`);
+  console.log(`    Issues   ${issues.length}`);
+  console.log(`    Warnings ${warnings.length}`);
+  if (issues.length) {
+    console.log('\n  Issues:');
+    for (const issue of issues) console.log(`    - ${issue}`);
+  }
+  if (warnings.length) {
+    console.log('\n  Warnings:');
+    for (const warning of warnings.slice(0, 20)) console.log(`    - ${warning}`);
+  }
+  if (!issues.length && !warnings.length) console.log('\n  Looks good.');
+  console.log();
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // COMPRESS — archive old log.md entries to keep file small
 // ═══════════════════════════════════════════════════════════════════
 
@@ -3215,7 +3360,6 @@ function runTrimSummary(dir) {
     : '# Session Summary Archive\n\nOlder oversized startup summaries moved by `memoc trim-summary`.\n';
   fs.appendFileSync(archivePath, `${archiveHeader}\n## [${nowISO()}] archived summary (${beforeBytes}B)\n\n${src.trimEnd()}\n`, 'utf8');
   write(summaryPath, compact);
-  appendMemocLog(dir, `trim-summary | Archived oversized session summary (${beforeBytes}B → ${afterBytes}B).`);
 
   console.log('\n  memoc trim-summary\n');
   console.log(`    Archived  .memoc/session-summary-archive.md`);
@@ -3349,6 +3493,7 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  actor [set <name>] Show or set the local memoc actor');
   console.log('  work "<title>"     Create a conflict-light actor worklog entry');
   console.log('  activity           List recent memoc worklog entries');
+  console.log('  doctor             Check common memoc health issues');
   console.log('  search "<query>"   Search memory/agent docs (use --snippets for line matches)');
   console.log('  grep "<query>"     Search project source/text files (use --snippets for line matches)');
   console.log('  ingest <path|url>  Create a raw/source record scaffold for wiki synthesis');
@@ -3375,6 +3520,7 @@ if (cmd === 'add')      { runAdd(cwd);        process.exit(0); }
 if (cmd === 'actor')    { runActor(cwd);      process.exit(0); }
 if (cmd === 'work')     { runWork(cwd);       process.exit(0); }
 if (cmd === 'activity') { runActivity(cwd);   process.exit(0); }
+if (cmd === 'doctor')   { runDoctor(cwd);     process.exit(0); }
 if (cmd === 'search')   { runSearch(cwd, 'memory');  process.exit(0); }
 if (cmd === 'grep')     { runSearch(cwd, 'project'); process.exit(0); }
 if (cmd === 'ingest')   { runIngest(cwd);     process.exit(0); }
