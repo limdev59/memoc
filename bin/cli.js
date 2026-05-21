@@ -233,16 +233,61 @@ function markdownTitle(src, fallback) {
   return m ? m[1].trim() : fallback;
 }
 
-function tplMemocCmdWrapper(cliPath = runtimeCliPath()) {
-  return `@echo off\r\nnode "${escapeCmdPath(cliPath)}" %*\r\n`;
+function tplMemocCmdWrapper() {
+  return [
+    '@echo off',
+    'set "MEMOC_RUNTIME=%MEMOC_RUNTIME_DIR%"',
+    'if "%MEMOC_RUNTIME%"=="" (',
+    '  if not "%LOCALAPPDATA%"=="" (',
+    '    set "MEMOC_RUNTIME=%LOCALAPPDATA%\\memoc\\runtime"',
+    '  ) else (',
+    '    set "MEMOC_RUNTIME=%USERPROFILE%\\AppData\\Local\\memoc\\runtime"',
+    '  )',
+    ')',
+    'set "MEMOC_CLI=%MEMOC_RUNTIME%\\bin\\cli.js"',
+    'if exist "%MEMOC_CLI%" (',
+    '  node "%MEMOC_CLI%" %*',
+    ') else (',
+    '  npx @kevin0181/memoc@latest %*',
+    ')',
+    'exit /b %ERRORLEVEL%',
+    '',
+  ].join('\r\n');
 }
 
-function tplMemocPs1Wrapper(cliPath = runtimeCliPath()) {
-  return `& node ${psSingleQuote(cliPath)} @args\nexit $LASTEXITCODE\n`;
+function tplMemocPs1Wrapper() {
+  return [
+    '$runtime = $env:MEMOC_RUNTIME_DIR',
+    'if (-not $runtime) {',
+    '  if ($env:LOCALAPPDATA) { $runtime = Join-Path $env:LOCALAPPDATA "memoc\\runtime" }',
+    '  else { $runtime = Join-Path $env:USERPROFILE "AppData\\Local\\memoc\\runtime" }',
+    '}',
+    '$cli = Join-Path $runtime "bin\\cli.js"',
+    'if (Test-Path $cli) {',
+    '  & node $cli @args',
+    '} else {',
+    '  & npx @kevin0181/memoc@latest @args',
+    '}',
+    'exit $LASTEXITCODE',
+    '',
+  ].join('\n');
 }
 
-function tplMemocShWrapper(cliPath = runtimeCliPath()) {
-  return `#!/bin/sh\nexec node ${shellSingleQuote(cliPath)} "$@"\n`;
+function tplMemocShWrapper() {
+  return [
+    '#!/bin/sh',
+    'if [ -n "$MEMOC_RUNTIME_DIR" ]; then',
+    '  memoc_runtime="$MEMOC_RUNTIME_DIR"',
+    'else',
+    '  memoc_runtime="${HOME:-$PWD}/.local/share/memoc/runtime"',
+    'fi',
+    'memoc_cli="$memoc_runtime/bin/cli.js"',
+    'if [ -f "$memoc_cli" ]; then',
+    '  exec node "$memoc_cli" "$@"',
+    'fi',
+    'exec npx @kevin0181/memoc@latest "$@"',
+    '',
+  ].join('\n');
 }
 
 function defaultUserBinDir() {
@@ -274,11 +319,11 @@ function tplEnvSh() {
 }
 
 function ensurePathHelpers(dir, mark) {
-  const cliPath = ensureRuntimeInstall(mark);
+  ensureRuntimeInstall(mark);
   const files = [
-    [path.join(dir, '.memoc', 'bin', 'memoc.cmd'), () => tplMemocCmdWrapper(cliPath), false],
-    [path.join(dir, '.memoc', 'bin', 'memoc.ps1'), () => tplMemocPs1Wrapper(cliPath), false],
-    [path.join(dir, '.memoc', 'bin', 'memoc'), () => tplMemocShWrapper(cliPath), true],
+    [path.join(dir, '.memoc', 'bin', 'memoc.cmd'), tplMemocCmdWrapper, false],
+    [path.join(dir, '.memoc', 'bin', 'memoc.ps1'), tplMemocPs1Wrapper, false],
+    [path.join(dir, '.memoc', 'bin', 'memoc'), tplMemocShWrapper, true],
     [path.join(dir, '.memoc', 'env.ps1'), tplEnvPs1, false],
     [path.join(dir, '.memoc', 'env.sh'), tplEnvSh, true],
   ];
@@ -293,15 +338,16 @@ function ensurePathHelpers(dir, mark) {
 
 function ensureUserLauncher(mark) {
   const userBin = defaultUserBinDir();
-  writeLaunchers(userBin, mark, 'user bin', ensureRuntimeInstall(mark));
+  ensureRuntimeInstall(mark);
+  writeLaunchers(userBin, mark, 'user bin');
   return userBin;
 }
 
-function writeLaunchers(binDir, mark, label, cliPath = ensureRuntimeInstall(mark)) {
+function writeLaunchers(binDir, mark, label) {
   const files = [
-    [path.join(binDir, 'memoc.cmd'), () => tplMemocCmdWrapper(cliPath), false],
-    [path.join(binDir, 'memoc.ps1'), () => tplMemocPs1Wrapper(cliPath), false],
-    [path.join(binDir, 'memoc'), () => tplMemocShWrapper(cliPath), true],
+    [path.join(binDir, 'memoc.cmd'), tplMemocCmdWrapper, false],
+    [path.join(binDir, 'memoc.ps1'), tplMemocPs1Wrapper, false],
+    [path.join(binDir, 'memoc'), tplMemocShWrapper, true],
   ];
 
   for (const [fp, tpl, executable] of files) {
@@ -398,7 +444,8 @@ function ensureCurrentPathLauncher(mark) {
     mark('skip', 'active PATH launcher (no writable PATH directory found)');
     return false;
   }
-  writeLaunchers(target, mark, 'active PATH', ensureRuntimeInstall(mark));
+  ensureRuntimeInstall(mark);
+  writeLaunchers(target, mark, 'active PATH');
   return true;
 }
 

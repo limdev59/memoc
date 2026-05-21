@@ -67,9 +67,15 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc.ps1')));
     assert.ok(fs.existsSync(path.join(userBin, 'memoc')));
-    assert.match(fs.readFileSync(path.join(userBin, 'memoc.cmd'), 'utf8'), /node .*cli\.js/);
-    assert.match(fs.readFileSync(path.join(userBin, 'memoc.ps1'), 'utf8'), /node .*cli\.js/);
-    assert.match(fs.readFileSync(path.join(userBin, 'memoc'), 'utf8'), /node .*cli\.js/);
+    const cmdWrapper = fs.readFileSync(path.join(userBin, 'memoc.cmd'), 'utf8');
+    const ps1Wrapper = fs.readFileSync(path.join(userBin, 'memoc.ps1'), 'utf8');
+    const shWrapper = fs.readFileSync(path.join(userBin, 'memoc'), 'utf8');
+    assert.match(cmdWrapper, /%LOCALAPPDATA%\\memoc\\runtime/);
+    assert.match(ps1Wrapper, /\$env:LOCALAPPDATA/);
+    assert.match(shWrapper, /\$\{HOME:-\$PWD\}\/\.local\/share\/memoc\/runtime/);
+    assert.doesNotMatch(cmdWrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
+    assert.doesNotMatch(ps1Wrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
+    assert.doesNotMatch(shWrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
     assert.ok(fs.existsSync(path.join(dir, 'fake-runtime', 'bin', 'cli.js')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.cmd')));
     assert.ok(fs.existsSync(path.join(activePathBin, 'memoc.ps1')));
