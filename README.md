@@ -144,7 +144,7 @@ Run it from the project root. It preserves existing project memory, including:
 - `.memoc/systems/`
 - `.memoc/wiki/`
 
-It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and memoc-owned protocol templates. User-owned memory files such as `session-summary.md`, `03-decisions.md`, `04-handoff.md`, `06-project-rules.md`, and wiki topic/source pages are preserved. If `memoc` is not on PATH after upgrading, keep using:
+It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and memoc-owned protocol templates. User-owned memory files such as `session-summary.md`, `03-decisions.md`, `04-handoff.md`, `06-project-rules.md`, and wiki topic/source pages are preserved. Upgrade also runs the `trim-summary` compaction pass so startup memory stays small. If `memoc` is not on PATH after upgrading, keep using:
 
 ```bash
 # Windows

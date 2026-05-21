@@ -246,6 +246,47 @@ function archiveLegacyLog(dir, mark) {
   mark('move', `${path.relative(dir, logPath)} -> ${path.relative(dir, archivePath)}`);
 }
 
+function summarySectionBulletCounts(src) {
+  const counts = {};
+  let current = '';
+  for (const line of String(src || '').split(/\r?\n/)) {
+    const heading = line.match(/^##\s+(.+?)\s*$/);
+    if (heading) {
+      current = heading[1].trim();
+      counts[current] = counts[current] || 0;
+      continue;
+    }
+    if (current && /^-\s+/.test(line)) counts[current] = (counts[current] || 0) + 1;
+  }
+  return counts;
+}
+
+function trimSummaryFile(dir) {
+  const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+  const archivePath = path.join(dir, '.memoc', 'session-summary-archive.md');
+  if (!fs.existsSync(summaryPath)) {
+    write(summaryPath, tplSessionSummary());
+    return { action: 'add' };
+  }
+
+  const src = fs.readFileSync(summaryPath, 'utf8');
+  const beforeBytes = Buffer.byteLength(src, 'utf8');
+  const counts = summarySectionBulletCounts(src);
+  const tooManyBullets = Object.values(counts).some(count => count > 3);
+  if (beforeBytes <= 800 && !tooManyBullets) {
+    return { action: 'skip', beforeBytes };
+  }
+
+  const compact = compactSessionSummary(src);
+  const afterBytes = Buffer.byteLength(compact, 'utf8');
+  const archiveHeader = fs.existsSync(archivePath)
+    ? ''
+    : '# Session Summary Archive\n\nOlder oversized startup summaries moved by `memoc trim-summary`.\n';
+  fs.appendFileSync(archivePath, `${archiveHeader}\n## [${nowISO()}] archived summary (${beforeBytes}B)\n\n${src.trimEnd()}\n`, 'utf8');
+  write(summaryPath, compact);
+  return { action: 'trim', beforeBytes, afterBytes };
+}
+
 function migrateLegacyLogReferences(filePath) {
   if (!fs.existsSync(filePath)) return false;
   const before = fs.readFileSync(filePath, 'utf8');
@@ -2392,6 +2433,16 @@ function run(dir, forceUpdate, action = 'update') {
 
     archiveLegacyLog(dir, mark);
 
+    const trim = trimSummaryFile(dir);
+    if (trim.action === 'trim') {
+      mark('update', `.memoc/session-summary.md (trimmed ${trim.beforeBytes}B -> ${trim.afterBytes}B)`);
+      mark('update', '.memoc/session-summary-archive.md');
+    } else if (trim.action === 'add') {
+      mark('add', '.memoc/session-summary.md');
+    } else {
+      mark('skip', `.memoc/session-summary.md (compact ${trim.beforeBytes || 0}B)`);
+    }
+
     // Obsidian graph filters — add/merge memoc tags for existing installs too
     ensureObsidianFrontmatter(dir, mark);
   }
@@ -3392,37 +3443,24 @@ function runCompress(dir) {
 // ═══════════════════════════════════════════════════════════════════
 
 function runTrimSummary(dir) {
-  const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
-  const archivePath = path.join(dir, '.memoc', 'session-summary-archive.md');
-  if (!fs.existsSync(summaryPath)) {
-    write(summaryPath, tplSessionSummary());
+  const result = trimSummaryFile(dir);
+  if (result.action === 'add') {
     console.log('\n  memoc trim-summary\n');
     console.log('    Added .memoc/session-summary.md');
     console.log('\n  Done.\n');
     return;
   }
 
-  const src = fs.readFileSync(summaryPath, 'utf8');
-  const beforeBytes = Buffer.byteLength(src, 'utf8');
-  const compact = compactSessionSummary(src);
-  const afterBytes = Buffer.byteLength(compact, 'utf8');
-
-  if (src === compact && beforeBytes <= 800) {
+  if (result.action === 'skip') {
     console.log('\n  memoc trim-summary\n');
-    console.log(`    session-summary.md is already compact (${beforeBytes}B).`);
+    console.log(`    session-summary.md is already compact (${result.beforeBytes}B).`);
     console.log('\n  Done.\n');
     return;
   }
 
-  const archiveHeader = fs.existsSync(archivePath)
-    ? ''
-    : '# Session Summary Archive\n\nOlder oversized startup summaries moved by `memoc trim-summary`.\n';
-  fs.appendFileSync(archivePath, `${archiveHeader}\n## [${nowISO()}] archived summary (${beforeBytes}B)\n\n${src.trimEnd()}\n`, 'utf8');
-  write(summaryPath, compact);
-
   console.log('\n  memoc trim-summary\n');
   console.log(`    Archived  .memoc/session-summary-archive.md`);
-  console.log(`    Rewrote   .memoc/session-summary.md (${beforeBytes}B → ${afterBytes}B)`);
+  console.log(`    Rewrote   .memoc/session-summary.md (${result.beforeBytes}B → ${result.afterBytes}B)`);
   console.log('    Reminder  Completed history belongs in worklog; resume details belong in 04-handoff.md.');
   console.log('\n  Done.\n');
 }

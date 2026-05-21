@@ -568,6 +568,32 @@ test('trim-summary archives oversized startup summary and rewrites compact snaps
   });
 });
 
+test('upgrade automatically trims oversized session summary', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+    const noisyBullets = Array.from({ length: 12 }, (_, i) => `- update detail ${i} ${'x'.repeat(120)}`).join('\n');
+    fs.writeFileSync(summaryPath, `# Session Summary\n\n## Status\n${noisyBullets}\n\n## Open Tasks\n- keep task\n`, 'utf8');
+
+    const output = execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
+    const compact = fs.readFileSync(summaryPath, 'utf8');
+    const archive = fs.readFileSync(path.join(dir, '.memoc', 'session-summary-archive.md'), 'utf8');
+
+    assert.match(output, /session-summary\.md \(trimmed/);
+    assert.ok(Buffer.byteLength(compact, 'utf8') < 1200);
+    assert.equal((compact.match(/update detail/g) || []).length, 3);
+    assert.match(archive, /update detail 11/);
+    assert.match(compact, /memoc\/state/);
+  });
+});
+
 test('upgrade merges memoc metadata into BOM frontmatter without duplicating YAML blocks', () => {
   withTempProject(dir => {
     const env = {
