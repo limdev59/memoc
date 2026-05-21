@@ -864,7 +864,7 @@ function obsidianFrontmatterSpec(relPath) {
 function mergeYamlFrontmatter(src, spec) {
   const fm = parseYamlFrontmatter(src);
   if (!fm) {
-    return `${formatMemocFrontmatter(spec)}\n${src}`;
+    return `${formatMemocFrontmatter(spec)}\n${String(src || '').replace(/^\uFEFF/, '')}`;
   }
 
   const lines = fm.body.split(/\r?\n/);
@@ -884,10 +884,12 @@ function mergeYamlFrontmatter(src, spec) {
 }
 
 function parseYamlFrontmatter(src) {
-  if (!src.startsWith('---\n') && !src.startsWith('---\r\n')) return null;
-  const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  const text = String(src || '').replace(/^\uFEFF/, '');
+  const offset = text.length === src.length ? 0 : 1;
+  if (!text.startsWith('---\n') && !text.startsWith('---\r\n')) return null;
+  const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!m) return null;
-  return { body: m[1], end: m[0].length };
+  return { body: m[1], end: m[0].length + offset };
 }
 
 function formatMemocFrontmatter(spec) {
