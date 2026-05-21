@@ -581,3 +581,44 @@ test('upgrade merges memoc metadata into BOM frontmatter without duplicating YAM
     assert.doesNotMatch(skill, /\uFEFF/);
   });
 });
+
+test('upgrade repairs nested frontmatter produced by older BOM handling', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    const skillPath = path.join(dir, 'skills', 'project-memory-maintainer', 'SKILL.md');
+    fs.mkdirSync(path.dirname(skillPath), { recursive: true });
+    fs.writeFileSync(
+      skillPath,
+      [
+        '---',
+        'memoc: true',
+        'type: skill',
+        'tags:',
+        '  - memoc',
+        '---',
+        '\uFEFF---',
+        'name: project-memory-maintainer',
+        'description: Existing skill.',
+        '---',
+        '',
+        '# Existing Skill',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
+
+    const skill = fs.readFileSync(skillPath, 'utf8');
+    assert.equal((skill.match(/^---$/gm) || []).length, 2);
+    assert.match(skill, /name: project-memory-maintainer/);
+    assert.match(skill, /description: Existing skill/);
+    assert.match(skill, /  - memoc\/skill/);
+    assert.doesNotMatch(skill, /\uFEFF/);
+  });
+});

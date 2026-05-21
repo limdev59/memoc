@@ -867,7 +867,15 @@ function mergeYamlFrontmatter(src, spec) {
     return `${formatMemocFrontmatter(spec)}\n${String(src || '').replace(/^\uFEFF/, '')}`;
   }
 
-  const lines = fm.body.split(/\r?\n/);
+  let body = fm.body;
+  let rest = String(src || '').slice(fm.end).replace(/^\uFEFF/, '');
+  const nested = parseYamlFrontmatter(rest);
+  if (nested) {
+    body = `${nested.body}\n${body}`;
+    rest = rest.slice(nested.end).replace(/^\uFEFF/, '');
+  }
+
+  const lines = body.split(/\r?\n/);
   const existingTags = readYamlTags(lines);
   const mergedTags = [...new Set([...existingTags, ...spec.tags])];
   const nextLines = mergeYamlScalar(lines, 'memoc', 'true');
@@ -880,7 +888,7 @@ function mergeYamlFrontmatter(src, spec) {
   mergeYamlTags(nextLines, mergedTags);
 
   const nextFm = ['---', ...nextLines, '---'].join('\n');
-  return nextFm + src.slice(fm.end);
+  return nextFm + rest;
 }
 
 function parseYamlFrontmatter(src) {
