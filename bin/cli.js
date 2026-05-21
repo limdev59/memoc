@@ -3294,13 +3294,43 @@ function searchPriority(file, scope = 'memory') {
 // ═══════════════════════════════════════════════════════════════════
 
 function runTokens(dir) {
+  const stats = memoryTokenStats(dir);
+
+  console.log('\n  memoc tokens\n');
+  let startupTotal = 0;
+  console.log('  Startup (always loaded):');
+  for (const item of stats.startup) {
+    startupTotal += item.tokens;
+    const warn = item.bytes > 1000 ? '  ⚠ large' : '';
+    console.log(`    ${item.name.padEnd(32)} ${String(item.tokens).padStart(5)} tokens  (${item.bytes}B)${warn}`);
+  }
+  console.log(`    ${'── startup total'.padEnd(32)} ${String(startupTotal).padStart(5)} tokens`);
+
+  console.log('\n  On-demand (read when needed):');
+  let onDemandTotal = 0;
+  for (const item of stats.onDemand) {
+    onDemandTotal += item.tokens;
+    const warn = item.tokens > 500 ? '  ⚠ consider compress' : '';
+    console.log(`    ${item.name.padEnd(32)} ${String(item.tokens).padStart(5)} tokens  (${item.bytes}B)${warn}`);
+  }
+  console.log(`    ${'── on-demand total'.padEnd(32)} ${String(onDemandTotal).padStart(5)} tokens`);
+  console.log(`\n  If all loaded: ~${startupTotal + onDemandTotal} tokens`);
+
+  const summaryContent = safeRead(path.join(dir, '.memoc', 'session-summary.md'));
+  const summaryBytes   = Buffer.byteLength(summaryContent, 'utf8');
+  if (summaryBytes > 800) {
+    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Run \`memoc trim-summary\`, then move completed history to worklog and resume details to 04-handoff.md.`);
+  }
+  console.log();
+}
+
+function memoryTokenStats(dir) {
   const est  = text => Math.ceil(Buffer.byteLength(text, 'utf8') / 4);
   const read = fp   => { try { return fs.readFileSync(fp, 'utf8'); } catch { return ''; } };
   const memDir = path.join(dir, '.memoc');
-
   const startup = [
-    ['CLAUDE.md',          path.join(dir, 'CLAUDE.md')],
-    ['session-summary.md', path.join(memDir, 'session-summary.md')],
+    ['CLAUDE.md',          path.join(dir, 'CLAUDE.md'), true],
+    ['session-summary.md', path.join(memDir, 'session-summary.md'), true],
   ];
   const onDemand = [
     ['llms.txt',                      path.join(dir, 'llms.txt')],
@@ -3310,40 +3340,19 @@ function runTokens(dir) {
     ['06-project-rules.md',           path.join(memDir, '06-project-rules.md')],
     ['activity.md',                   path.join(memDir, 'activity.md')],
   ];
-
-  console.log('\n  memoc tokens\n');
-  let startupTotal = 0;
-  console.log('  Startup (always loaded):');
-  for (const [name, fp] of startup) {
+  const existing = ([, fp, keep]) => keep || fs.existsSync(fp);
+  const toItem = ([name, fp]) => {
     const content = read(fp);
-    const t = est(content);
-    const b = Buffer.byteLength(content, 'utf8');
-    startupTotal += t;
-    const warn = b > 1000 ? '  ⚠ large' : '';
-    console.log(`    ${name.padEnd(32)} ${String(t).padStart(5)} tokens  (${b}B)${warn}`);
-  }
-  console.log(`    ${'── startup total'.padEnd(32)} ${String(startupTotal).padStart(5)} tokens`);
-
-  console.log('\n  On-demand (read when needed):');
-  let onDemandTotal = 0;
-  for (const [name, fp] of onDemand) {
-    const content = read(fp);
-    if (!content) continue;
-    const t = est(content);
-    const b = Buffer.byteLength(content, 'utf8');
-    onDemandTotal += t;
-    const warn = t > 500 ? '  ⚠ consider compress' : '';
-    console.log(`    ${name.padEnd(32)} ${String(t).padStart(5)} tokens  (${b}B)${warn}`);
-  }
-  console.log(`    ${'── on-demand total'.padEnd(32)} ${String(onDemandTotal).padStart(5)} tokens`);
-  console.log(`\n  If all loaded: ~${startupTotal + onDemandTotal} tokens`);
-
-  const summaryContent = read(path.join(memDir, 'session-summary.md'));
-  const summaryBytes   = Buffer.byteLength(summaryContent, 'utf8');
-  if (summaryBytes > 800) {
-    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Run \`memoc trim-summary\`, then move completed history to worklog and resume details to 04-handoff.md.`);
-  }
-  console.log();
+    return { name, fp, bytes: Buffer.byteLength(content, 'utf8'), tokens: est(content) };
+  };
+  const startupItems = startup.filter(existing).map(toItem);
+  const onDemandItems = onDemand.filter(existing).map(toItem);
+  return {
+    startup: startupItems,
+    onDemand: onDemandItems,
+    startupTokens: startupItems.reduce((sum, item) => sum + item.tokens, 0),
+    allTokens: [...startupItems, ...onDemandItems].reduce((sum, item) => sum + item.tokens, 0),
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3396,47 +3405,46 @@ function runDoctor(dir) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// COMPRESS — legacy log.md archiver
+// COMPRESS — safe whole-memory compaction
 // ═══════════════════════════════════════════════════════════════════
 
 function runCompress(dir) {
-  const KEEP = 20;
-  const logPath     = path.join(dir, '.memoc', 'log.md');
-  const archivePath = path.join(dir, '.memoc', 'log-archive.md');
-
-  if (!fs.existsSync(logPath)) {
-    console.log('\n  No .memoc/log.md found.\n');
-    return;
-  }
-
-  const src = fs.readFileSync(logPath, 'utf8');
-  // Split on entry headers, keep header as part of each chunk
-  const parts  = src.split(/(?=\n## \[)/);
-  const header = parts[0]; // everything before first entry
-  const entries = parts.slice(1).filter(e => e.trim());
-
-  if (entries.length <= KEEP) {
-    console.log(`\n  log.md has ${entries.length} entries — nothing to compress (threshold: ${KEEP}).\n`);
-    return;
-  }
-
-  const toArchive = entries.slice(0, entries.length - KEEP);
-  const toKeep    = entries.slice(entries.length - KEEP);
-
-  // Append to archive
-  const archiveExists = fs.existsSync(archivePath);
-  const archiveHeader = archiveExists ? '' : '# Log Archive\n\nOlder entries moved from log.md by `memoc compress`.\n';
-  fs.appendFileSync(archivePath, archiveHeader + toArchive.join('') + '\n', 'utf8');
-
-  // Rewrite log.md with only recent entries
-  write(logPath, header.trimEnd() + '\n' + toKeep.join('') + '\n');
+  ensureMemocBase(dir);
+  const before = memoryTokenStats(dir);
+  const actions = [];
+  const mark = (label, name) => actions.push(`    ${label.padEnd(8)} ${name}`);
 
   console.log(`\n  memoc compress\n`);
-  console.log('    Legacy command: new activity should use .memoc/worklog/ instead of log.md.');
-  console.log(`    Archived  ${toArchive.length} entries → .memoc/log-archive.md`);
-  console.log(`    Kept      ${toKeep.length} recent entries in log.md`);
-  const saved = Buffer.byteLength(toArchive.join(''), 'utf8');
-  console.log(`    Freed     ~${saved}B from log.md`);
+  archiveLegacyLog(dir, mark);
+
+  const trim = trimSummaryFile(dir);
+  if (trim.action === 'trim') {
+    mark('update', `.memoc/session-summary.md (${trim.beforeBytes}B -> ${trim.afterBytes}B)`);
+    mark('update', '.memoc/session-summary-archive.md');
+  } else if (trim.action === 'add') {
+    mark('add', '.memoc/session-summary.md');
+  } else {
+    mark('skip', `.memoc/session-summary.md (compact ${trim.beforeBytes || 0}B)`);
+  }
+
+  const workRoot = path.join(dir, '.memoc', 'worklog');
+  const recent = listMarkdownFiles(workRoot)
+    .filter(fp => path.basename(fp) !== 'README.md')
+    .sort()
+    .reverse()
+    .slice(0, 20);
+  writeActivityIndexes(dir, recent);
+  mark('update', '.memoc/activity.md, .memoc/worklog/README.md, .memoc/actors/README.md');
+
+  ensureObsidianFrontmatter(dir, mark);
+
+  const after = memoryTokenStats(dir);
+  const startupDelta = before.startupTokens - after.startupTokens;
+  const allDelta = before.allTokens - after.allTokens;
+  console.log(actions.join('\n'));
+  console.log(`\n    Startup  ~${before.startupTokens} -> ~${after.startupTokens} tokens (${startupDelta >= 0 ? '-' : '+'}${Math.abs(startupDelta)})`);
+  console.log(`    All mem   ~${before.allTokens} -> ~${after.allTokens} tokens (${allDelta >= 0 ? '-' : '+'}${Math.abs(allDelta)})`);
+  console.log('    Note     Decisions, handoff, rules, wiki topics, and source docs are preserved.');
   console.log('\n  Done.\n');
 }
 
@@ -3495,14 +3503,14 @@ function sectionText(src, heading) {
 }
 
 function compactSummaryBullets(text) {
-  const maxLine = 72;
+  const maxLine = 48;
   return String(text || '')
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(line => line && !line.startsWith('#') && !/^_.*_$/.test(line))
     .map(line => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
     .filter(Boolean)
-    .slice(0, 3)
+    .slice(0, 2)
     .map(line => {
       const compact = line
         .replace(/`/g, '')
@@ -3594,7 +3602,7 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  summary            Print a tiny status/resume overview');
   console.log('  tokens             Estimate token cost of current memory files');
   console.log('  trim-summary       Archive and compact oversized session-summary.md');
-  console.log('  compress           Legacy: archive old log.md entries');
+  console.log('  compress           Compact memoc files and refresh generated indexes');
   console.log('  add <agent>        Add entry file for a specific agent (run without args to list)');
   console.log('  actor [set <name>] Show or set the local memoc actor');
   console.log('  work "<title>"     Create a conflict-light actor worklog entry');

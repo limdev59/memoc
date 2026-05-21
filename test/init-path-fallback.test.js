@@ -561,8 +561,8 @@ test('trim-summary archives oversized startup summary and rewrites compact snaps
 
     assert.match(output, /memoc trim-summary/);
     assert.ok(Buffer.byteLength(compact, 'utf8') < 800);
-    assert.equal((compact.match(/status detail/g) || []).length, 3);
-    assert.equal((compact.match(/changed detail/g) || []).length, 3);
+    assert.equal((compact.match(/status detail/g) || []).length, 2);
+    assert.equal((compact.match(/changed detail/g) || []).length, 2);
     assert.match(archive, /status detail 11/);
     assert.match(archive, /archived summary/);
   });
@@ -587,10 +587,41 @@ test('upgrade automatically trims oversized session summary', () => {
     const archive = fs.readFileSync(path.join(dir, '.memoc', 'session-summary-archive.md'), 'utf8');
 
     assert.match(output, /session-summary\.md \(trimmed/);
-    assert.ok(Buffer.byteLength(compact, 'utf8') < 1200);
-    assert.equal((compact.match(/update detail/g) || []).length, 3);
+    assert.ok(Buffer.byteLength(compact, 'utf8') < 800);
+    assert.equal((compact.match(/update detail/g) || []).length, 2);
     assert.match(archive, /update detail 11/);
     assert.match(compact, /memoc\/state/);
+  });
+});
+
+test('compress trims startup memory, archives legacy log, and refreshes activity indexes', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    execFileSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
+    execFileSync(process.execPath, [cliPath, 'actor', 'set', 'neneee'], { cwd: dir, encoding: 'utf8', env });
+
+    const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+    fs.writeFileSync(summaryPath, `# Session Summary\n\n## Status\n${Array.from({ length: 10 }, (_, i) => `- noisy status ${i} ${'x'.repeat(120)}`).join('\n')}\n`, 'utf8');
+    fs.writeFileSync(path.join(dir, '.memoc', 'log.md'), '# Project Log\n\n## old\n- legacy history\n', 'utf8');
+    fs.writeFileSync(path.join(dir, 'src.js'), 'console.log("changed");\n', 'utf8');
+    execFileSync(process.execPath, [cliPath, 'work', 'Compression check', '--from-git'], { cwd: dir, encoding: 'utf8', env });
+
+    const output = execFileSync(process.execPath, [cliPath, 'compress'], { cwd: dir, encoding: 'utf8', env });
+    const compact = fs.readFileSync(summaryPath, 'utf8');
+
+    assert.match(output, /memoc compress/);
+    assert.match(output, /Startup\s+~/);
+    assert.ok(Buffer.byteLength(compact, 'utf8') < 800);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'log.md')), false);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'raw', 'legacy-log.md'), 'utf8'), /legacy history/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'activity.md'), 'utf8'), /Compression check/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'worklog', 'README.md'), 'utf8'), /Compression check/);
   });
 });
 

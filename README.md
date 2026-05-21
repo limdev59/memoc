@@ -113,7 +113,7 @@ npx @kevin0181/memoc tokens
 # Archive and compact an oversized startup summary
 npx @kevin0181/memoc trim-summary
 
-# Legacy: archive old log.md entries before deleting/migrating log.md
+# Compact oversized memoc files and refresh generated indexes
 npx @kevin0181/memoc compress
 
 # Add the same protocol to another agent's entry file
@@ -228,7 +228,7 @@ Startup cost is kept minimal by design.
 
 Everything else is on-demand. Use `memoc tokens` to see the live breakdown for your project.
 
-`session-summary.md` is a replace-only startup snapshot, not a timeline. If it grows beyond the warning threshold, run `memoc trim-summary`; completed history belongs in `.memoc/worklog/<actor>/YYYY-MM/`, and unfinished/risky resume detail belongs in `.memoc/04-handoff.md`.
+`session-summary.md` is a replace-only startup snapshot, not a timeline. If it grows beyond the warning threshold, run `memoc compress` or `memoc trim-summary`; completed history belongs in `.memoc/worklog/<actor>/YYYY-MM/`, and unfinished/risky resume detail belongs in `.memoc/04-handoff.md`.
 
 ---
 
@@ -294,7 +294,7 @@ Node.js · Next.js · React · Vue · Svelte · Angular · Nuxt · Astro · Expr
 - **New project** — scaffolds all memory files with sensible defaults.
 - **Existing project** — detects your stack and fills in real project info (name, scripts, config files).
 - **Already initialized** — `init` injects the managed block without touching your existing content. `update` re-scans and refreshes project-specific sections.
-- **Long-running projects** — use actor worklogs for history; `compress` remains only for old `log.md` files.
+- **Long-running projects** — use actor worklogs for history; run `compress` to trim startup memory, archive legacy logs, and refresh generated activity indexes.
 
 ---
 
