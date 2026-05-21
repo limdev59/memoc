@@ -293,10 +293,36 @@ function migrateKnowledgeWiki(dir, mark) {
   }
 }
 
+function migrateKnowledgeLayerLinks(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  const before = safeRead(filePath);
+  if (!before) return false;
+
+  let after = before;
+  const normalized = filePath.replace(/\\/g, '/');
+
+  if (/\/wiki\/knowledge\/(sources|glossary|questions|lint)\.md$/.test(normalized)) {
+    after = after
+      .replace(/\]\(index\.md\)/g, '](../index.md)')
+      .replace(/\]\(\.\.\/raw\/README\.md\)/g, '](../../raw/README.md)');
+  }
+
+  if (/\/wiki\/knowledge\/global\/README\.md$/.test(normalized)) {
+    after = after
+      .replace(/\]\(\.\.\/index\.md\)/g, '](../../index.md)')
+      .replace(/\]\(\.\.\/\.\.\/00-project-brief\.md\)/g, '](../../../00-project-brief.md)')
+      .replace(/\]\(\.\.\/\.\.\/06-project-rules\.md\)/g, '](../../../06-project-rules.md)');
+  }
+
+  if (after === before) return false;
+  write(filePath, after);
+  return true;
+}
+
 function isDefaultKnowledgeScaffold(filePath) {
   const src = safeRead(filePath);
   const name = path.basename(filePath);
-  if (name === 'sources.md') return src.includes('# Sources') && src.includes('_No sources recorded yet._');
+  if (name === 'sources.md') return src.includes('# Sources') && src.includes('_No sources recorded yet.');
   if (name === 'glossary.md') return src.includes('# Glossary') && src.includes('_No terms defined yet.');
   if (name === 'questions.md') return src.includes('# Open Questions') && src.includes('_No open questions yet._');
   if (name === 'lint.md') return src.includes('# Wiki Lint') && src.includes('_No issues found._');
@@ -2539,6 +2565,17 @@ function run(dir, forceUpdate, action = 'update') {
     }
     ensureWikiScaffoldLinks(memDir, mark);
 
+    const knowledgeLayerFiles = [
+      path.join(memDir, 'wiki/knowledge/sources.md'),
+      path.join(memDir, 'wiki/knowledge/glossary.md'),
+      path.join(memDir, 'wiki/knowledge/questions.md'),
+      path.join(memDir, 'wiki/knowledge/lint.md'),
+      path.join(memDir, 'wiki/knowledge/global/README.md'),
+    ];
+    for (const fp of knowledgeLayerFiles) {
+      if (migrateKnowledgeLayerLinks(fp)) mark('update', `${path.relative(dir, fp)} (wiki links)`);
+    }
+
     const legacyReferenceFiles = [
       path.join(memDir, '02-current-project-state.md'),
       path.join(memDir, '04-handoff.md'),
@@ -2943,7 +2980,7 @@ ${warnings.length ? warnings.map(x => `- ${x}`).join('\n') : '_None._'}
 
 ## Related
 
-- [Wiki Index](index.md)
+- [Wiki Index](../index.md)
 - [Sources](sources.md)
 - [Topics](topics/README.md)
 - [Open Questions](questions.md)

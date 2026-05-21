@@ -425,6 +425,41 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
         '',
         '- User-owned term should stay.',
         '',
+        '## Related',
+        '',
+        '- [Wiki Index](index.md)',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'wiki', 'sources.md'),
+      [
+        '# Sources',
+        '',
+        '## Source Records',
+        '',
+        '_No sources recorded yet._',
+        '',
+        '## Related',
+        '',
+        '- [Wiki Index](index.md)',
+        '- [Raw Sources](../raw/README.md)',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'wiki', 'knowledge', 'global', 'README.md'),
+      [
+        '# Global',
+        '',
+        '## Related',
+        '',
+        '- [Wiki Index](../index.md)',
+        '- [Project Brief](../../00-project-brief.md)',
+        '- [Project Rules](../../06-project-rules.md)',
+        '',
       ].join('\n'),
       'utf8'
     );
@@ -433,13 +468,22 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
 
     const wikiIndex = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
     const glossary = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'glossary.md'), 'utf8');
+    const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources.md'), 'utf8');
+    const global = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'global', 'README.md'), 'utf8');
 
     assert.match(wikiIndex, /## Wiki Layers/);
     assert.match(wikiIndex, /\[Knowledge Wiki\]\(knowledge\/README\.md\)/);
     assert.match(glossary, /^---\nmemoc: true\n/m);
     assert.match(glossary, /  - memoc\/glossary/);
     assert.match(glossary, /User-owned term should stay/);
+    assert.match(glossary, /\[Wiki Index\]\(\.\.\/index\.md\)/);
+    assert.match(sources, /\[Wiki Index\]\(\.\.\/index\.md\)/);
+    assert.match(sources, /\[Raw Sources\]\(\.\.\/\.\.\/raw\/README\.md\)/);
+    assert.match(global, /\[Wiki Index\]\(\.\.\/\.\.\/index\.md\)/);
+    assert.match(global, /\[Project Brief\]\(\.\.\/\.\.\/\.\.\/00-project-brief\.md\)/);
+    assert.match(global, /\[Project Rules\]\(\.\.\/\.\.\/\.\.\/06-project-rules\.md\)/);
     assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'glossary.md')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'sources.md')), false);
   });
 });
 
