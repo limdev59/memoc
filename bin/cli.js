@@ -172,6 +172,7 @@ function scanProject(dir, depth = 0) {
 // ═══════════════════════════════════════════════════════════════════
 
 function nowISO() { return new Date().toISOString().slice(0, 19); }
+function todayISO() { return new Date().toISOString().slice(0, 10); }
 
 function stackStr(stack) { return stack.length ? stack.join(', ') : 'Not detected'; }
 
@@ -206,6 +207,30 @@ function ensure(filePath, content) {
 function write(filePath, content) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, content, 'utf8');
+}
+
+function slugify(value, fallback = 'note') {
+  const slug = String(value || '')
+    .toLowerCase()
+    .replace(/['"]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+  return slug || fallback;
+}
+
+function uniquePath(filePath) {
+  if (!fs.existsSync(filePath)) return filePath;
+  const ext = path.extname(filePath);
+  const base = filePath.slice(0, filePath.length - ext.length);
+  let i = 2;
+  while (fs.existsSync(`${base}-${i}${ext}`)) i += 1;
+  return `${base}-${i}${ext}`;
+}
+
+function markdownTitle(src, fallback) {
+  const m = String(src || '').match(/^#\s+(.+)$/m);
+  return m ? m[1].trim() : fallback;
 }
 
 function tplMemocCmdWrapper(cliPath = runtimeCliPath()) {
@@ -604,6 +629,8 @@ function managedBlock() {
 - [ ] Search memory first: \`memoc search "<query>" --limit 5\`, or wrapper fallback above if PATH fails
 - [ ] Open on demand: \`02\` status, \`04\` resume, \`06\` rules, \`llms.txt\` map
 - [ ] If memory search is not enough, search project files with \`memoc grep "<query>" --limit 5\` (or wrapper fallback)
+- [ ] If asked to refresh/update memoc project memory, run \`memoc update\` first; this refreshes managed sections, wiki links, and Obsidian tags.
+- [ ] For durable source material use \`memoc ingest <path-or-url>\`; for durable analysis/query results use \`memoc note "<title>"\`; after wiki edits run \`memoc lint-wiki\`.
 - [ ] Keep output small: \`summary\`, \`search --limit\`, \`grep --limit\`, \`--snippets\`
 
 ## Before Finishing _(update only applicable files; skip Q&A / throwaway exploration)_
@@ -612,6 +639,8 @@ function managedBlock() {
 - [ ] Work incomplete or risky? Update \`04-handoff.md\`
 - [ ] Rule/preference set? Update \`06-project-rules.md\`
 - [ ] Wiki/systems work? Read \`skills/project-memory-maintainer/SKILL.md\`
+- [ ] User asked to update memoc/project memory? Run \`memoc update\`, then update the smallest relevant agent-owned memory files.
+- [ ] Keep \`session-summary.md\` as a replace-only snapshot under 800B; move completed history to \`log.md\` and resume details to \`04-handoff.md\`. If it grew, run \`memoc trim-summary\`.
 ${MGMT_E}`;
 }
 
@@ -648,6 +677,7 @@ function coreLlmsInner() {
 - [Decisions](.memoc/03-decisions.md): durable decisions.
 - [Log](.memoc/log.md): append-only history.
 - [Systems](.memoc/systems/README.md): subsystem docs.
+- [Raw Sources](.memoc/raw/README.md): immutable source material; do not read by default.
 - [Wiki](.memoc/wiki/index.md): synthesized knowledge.`;
 }
 
@@ -739,6 +769,201 @@ function ensureWikiScaffoldLinks(memDir, mark) {
     const result = writeIfDefaultish(fp, tpl(), isDefaultish);
     if (result !== 'skip') mark(result, `${path.relative(path.dirname(memDir), fp)} (wiki links)`);
   }
+}
+
+function ensureObsidianFrontmatter(dir, mark) {
+  const files = collectMemocMarkdownFiles(dir);
+  let changed = 0;
+  for (const fp of files) {
+    if (ensureMemocFrontmatter(fp, dir)) changed += 1;
+  }
+  mark(changed ? 'update' : 'skip', `Obsidian tags (${changed || 'already present'})`);
+}
+
+function collectMemocMarkdownFiles(dir) {
+  const files = [];
+  function walk(root) {
+    if (!fs.existsSync(root)) return;
+    try {
+      const st = fs.statSync(root);
+      if (st.isFile()) {
+        if (root.endsWith('.md')) files.push(root);
+        return;
+      }
+      if (!st.isDirectory()) return;
+      for (const entry of fs.readdirSync(root)) walk(path.join(root, entry));
+    } catch {}
+  }
+  walk(path.join(dir, '.memoc'));
+  walk(path.join(dir, 'skills', 'project-memory-maintainer'));
+  return files.sort();
+}
+
+function ensureMemocFrontmatter(filePath, dir) {
+  let src = '';
+  try { src = fs.readFileSync(filePath, 'utf8'); } catch { return false; }
+  const spec = obsidianFrontmatterSpec(path.relative(dir, filePath));
+  const next = mergeYamlFrontmatter(src, spec);
+  if (next === src) return false;
+  write(filePath, next);
+  return true;
+}
+
+function obsidianFrontmatterSpec(relPath) {
+  const rel = relPath.replace(/\\/g, '/');
+  let type = 'core';
+  const tags = ['memoc'];
+  const now = nowISO();
+  const extra = {
+    created: now,
+    updated: now,
+    status: 'active',
+  };
+
+  if (rel.startsWith('.memoc/wiki/')) {
+    type = 'wiki';
+    extra.confidence = 'medium';
+    tags.push('memoc/wiki');
+    if (rel.startsWith('.memoc/wiki/sources/')) {
+      tags.push('memoc/source');
+      extra.status = 'needs-synthesis';
+    } else if (rel.startsWith('.memoc/wiki/topics/')) {
+      tags.push('memoc/topic');
+    } else if (rel.startsWith('.memoc/wiki/global/')) {
+      tags.push('memoc/global');
+    } else if (rel.endsWith('/sources.md')) {
+      tags.push('memoc/source');
+    } else if (rel.endsWith('/glossary.md')) {
+      tags.push('memoc/glossary');
+    } else if (rel.endsWith('/questions.md')) {
+      tags.push('memoc/question');
+      extra.status = 'needs-review';
+    } else if (rel.endsWith('/lint.md')) {
+      tags.push('memoc/lint');
+      extra.status = 'generated';
+    }
+  } else if (rel.startsWith('.memoc/systems/')) {
+    type = 'system';
+    tags.push('memoc/system');
+  } else if (rel.startsWith('.memoc/raw/')) {
+    type = 'raw';
+    tags.push('memoc/raw');
+  } else if (rel.startsWith('skills/project-memory-maintainer/')) {
+    type = 'skill';
+    tags.push('memoc/skill');
+  } else if (/(session-summary|current-project-state|handoff|project-rules|decisions|log)\.md$/.test(rel)) {
+    type = 'state';
+    tags.push('memoc/state');
+  } else {
+    tags.push('memoc/core');
+  }
+
+  return { type, tags, extra };
+}
+
+function mergeYamlFrontmatter(src, spec) {
+  const fm = parseYamlFrontmatter(src);
+  if (!fm) {
+    return `${formatMemocFrontmatter(spec)}\n${src}`;
+  }
+
+  const lines = fm.body.split(/\r?\n/);
+  const existingTags = readYamlTags(lines);
+  const mergedTags = [...new Set([...existingTags, ...spec.tags])];
+  const nextLines = mergeYamlScalar(lines, 'memoc', 'true');
+  mergeYamlScalar(nextLines, 'type', spec.type);
+  mergeYamlScalar(nextLines, 'scope', 'project-memory');
+  mergeYamlScalarIfMissing(nextLines, 'updated', spec.extra.updated);
+  mergeYamlScalarIfMissing(nextLines, 'created', spec.extra.created);
+  mergeYamlScalarIfMissing(nextLines, 'status', spec.extra.status);
+  if (spec.extra.confidence) mergeYamlScalarIfMissing(nextLines, 'confidence', spec.extra.confidence);
+  mergeYamlTags(nextLines, mergedTags);
+
+  const nextFm = ['---', ...nextLines, '---'].join('\n');
+  return nextFm + src.slice(fm.end);
+}
+
+function parseYamlFrontmatter(src) {
+  if (!src.startsWith('---\n') && !src.startsWith('---\r\n')) return null;
+  const m = src.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
+  if (!m) return null;
+  return { body: m[1], end: m[0].length };
+}
+
+function formatMemocFrontmatter(spec) {
+  return [
+    '---',
+    'memoc: true',
+    `type: ${spec.type}`,
+    'scope: project-memory',
+    `created: ${spec.extra.created}`,
+    `updated: ${spec.extra.updated}`,
+    `status: ${spec.extra.status}`,
+    ...(spec.extra.confidence ? [`confidence: ${spec.extra.confidence}`] : []),
+    'tags:',
+    ...spec.tags.map(tag => `  - ${tag}`),
+    '---',
+  ].join('\n');
+}
+
+function mergeYamlScalar(lines, key, value) {
+  const re = new RegExp(`^${escapeRegExp(key)}\\s*:`);
+  const idx = lines.findIndex(line => re.test(line.trim()));
+  if (idx === -1) lines.push(`${key}: ${value}`);
+  else lines[idx] = `${key}: ${value}`;
+  return lines;
+}
+
+function mergeYamlScalarIfMissing(lines, key, value) {
+  const re = new RegExp(`^${escapeRegExp(key)}\\s*:`);
+  if (lines.findIndex(line => re.test(line.trim())) === -1) lines.push(`${key}: ${value}`);
+  return lines;
+}
+
+function mergeYamlTags(lines, tags) {
+  const idx = lines.findIndex(line => /^tags\s*:/.test(line.trim()));
+  const tagLines = ['tags:', ...tags.map(tag => `  - ${tag}`)];
+  if (idx === -1) {
+    lines.push(...tagLines);
+    return;
+  }
+
+  let end = idx + 1;
+  while (end < lines.length && (/^\s+-\s+/.test(lines[end]) || lines[end].trim() === '')) end += 1;
+  lines.splice(idx, end - idx, ...tagLines);
+}
+
+function readYamlTags(lines) {
+  const tags = [];
+  const inline = lines.find(line => /^tags\s*:\s*\[/.test(line.trim()));
+  if (inline) {
+    const m = inline.match(/\[(.*)\]/);
+    if (m) {
+      for (const item of m[1].split(',')) {
+        const tag = item.trim().replace(/^['"]|['"]$/g, '').replace(/^#/, '');
+        if (tag) tags.push(tag);
+      }
+    }
+  }
+
+  const idx = lines.findIndex(line => /^tags\s*:/.test(line.trim()));
+  if (idx !== -1) {
+    for (let i = idx + 1; i < lines.length; i++) {
+      const m = lines[i].match(/^\s+-\s+(.+?)\s*$/);
+      if (!m) {
+        if (lines[i].trim() === '') continue;
+        break;
+      }
+      const tag = m[1].trim().replace(/^['"]|['"]$/g, '').replace(/^#/, '');
+      if (tag) tags.push(tag);
+    }
+  }
+
+  return [...new Set(tags)];
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -874,6 +1099,7 @@ ${SNAP_E}
 - [Session Summary](session-summary.md)
 - [Project Log](log.md)
 - [Wiki Index](wiki/index.md)
+- [Raw Sources](raw/README.md)
 - [Systems Index](systems/README.md)
 
 ## System Docs
@@ -930,7 +1156,9 @@ See \`.memoc/log.md\`.
 function tplSessionSummary() {
   return `# Session Summary
 Last: ${nowISO()}
-Keep each section ≤ 3 bullets. Agent-owned — updated by you, not by \`memoc update\`.
+Replace this file instead of appending to it. Keep total size <800B and each section ≤3 bullets.
+Completed history belongs in \`log.md\`; incomplete/risky resume detail belongs in \`04-handoff.md\`.
+Agent-owned — updated by you, not by \`memoc update\`.
 
 ## Status
 _What is the current state of the project?_
@@ -998,12 +1226,16 @@ Shared protocol for any coding agent.
 
 | Trigger | Update |
 | --- | --- |
+| User asks "update memoc", "refresh project memory", or similar | Run \`memoc update\` first, then update relevant agent-owned memory files |
 | User creates or changes a requirement | \`02-current-project-state.md\`, \`06-project-rules.md\`, \`log.md\` |
 | Code, config, data, or assets changed | \`02-current-project-state.md\`, relevant \`systems/*.md\`, \`log.md\` |
 | Architecture or system behavior changed | relevant \`systems/*.md\`, \`03-decisions.md\` |
 | A decision should affect future agents | \`03-decisions.md\`, \`02-current-project-state.md\` |
 | Work is substantial enough to resume later | \`04-handoff.md\`, \`02-current-project-state.md\`, \`log.md\` |
 | Durable knowledge was learned | \`wiki/*.md\`, \`wiki/index.md\` |
+| Source material should feed the wiki | \`memoc ingest <path-or-url>\`, then synthesize affected \`wiki/topics/*.md\` |
+| A useful query answer should persist | \`memoc note "<title>"\`, then link related sources/topics |
+| \`session-summary.md\` exceeds 800B or starts accumulating history | Run \`memoc trim-summary\`; move history to \`log.md\`, resume details to \`04-handoff.md\` |
 
 ## Usually No Update Needed
 
@@ -1014,7 +1246,7 @@ Shared protocol for any coding agent.
 ## Documentation Shape
 
 - Entry files: protocol only.
-- \`session-summary.md\`: latest snapshot, max 3 bullets per section.
+- \`session-summary.md\`: replace-only latest snapshot, <800B, max 3 bullets per section; never use as history.
 - \`02-current-project-state.md\`: current status, tasks, commands, recent notes.
 - \`04-handoff.md\`: resume context, blockers, verified/unverified checks.
 - \`03-decisions.md\`: append durable decisions only.
@@ -1154,6 +1386,7 @@ memoc upgrade
 
 # Explicitly update managed sections based on current project state
 memoc update
+memoc trim-summary
 
 # Tiny status overview
 memoc summary
@@ -1165,6 +1398,11 @@ memoc search "<query>" --snippets --limit 5
 # Search project source/text files when memory is not enough
 memoc grep "<query>" --limit 12
 memoc grep "<query>" --snippets --limit 5
+
+# Wiki operations
+memoc ingest <path-or-url>
+memoc note "Durable topic or query result"
+memoc lint-wiki
 \`\`\`
 
 If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh for the rest of the session. If the local wrapper is missing, use \`npx @kevin0181/memoc <command>\` or re-run init.
@@ -1180,10 +1418,13 @@ If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Wind
 
 Use \`memoc search\` for known concepts, changed areas, decisions, tasks, or handoff notes. Skip it for brand-new questions where no prior memory can exist.
 
+Raw files under \`.memoc/raw/\` are intentionally not part of normal memory search. Open them only through a linked source record when provenance is needed.
+
 ## When To Run Memory Updates
 
 Use \`memoc update\` or \`skills/project-memory-maintainer/SKILL.md\` when:
 
+- The user asks to update memoc, refresh project memory, sync project memory, or "update the project in memoc".
 - Requirements, acceptance criteria, user preferences, or project rules changed.
 - Source code, config, data, content, or package scripts changed.
 - Architecture, data flow, routing, auth, or deployment behavior changed.
@@ -1193,17 +1434,32 @@ Use \`memoc update\` or \`skills/project-memory-maintainer/SKILL.md\` when:
 
 Usually skip for pure Q&A, throwaway exploration, or tiny edits with no future impact.
 
+When the user asks for a general memoc/project-memory refresh, run \`memoc update\` first. It refreshes managed sections, reconnects default wiki scaffold links, and applies Obsidian frontmatter tags. Then update only the agent-owned files whose content actually changed, such as \`.memoc/session-summary.md\`, \`.memoc/02-current-project-state.md\`, \`.memoc/04-handoff.md\`, \`.memoc/wiki/index.md\`, or \`.memoc/log.md\`.
+
+\`.memoc/session-summary.md\` is a startup snapshot, not a timeline. Rewrite it in place, do not append old work. If it exceeds 800B, run \`memoc trim-summary\`; it archives the previous summary and rewrites a compact version. Put completed history in \`.memoc/log.md\`, and put unfinished/risky resume detail in \`.memoc/04-handoff.md\`.
+
 ## Updating The Wiki
 
 Create a new Markdown file under \`.memoc/wiki/\` when synthesized knowledge should compound across sessions.
 
+- \`.memoc/raw/\`: immutable source material copied or referenced by \`memoc ingest\`.
 - \`.memoc/wiki/sources/\`: provenance records.
 - \`.memoc/wiki/topics/\`: synthesized topic pages.
 - \`.memoc/wiki/global/\`: project-wide principles.
 
 After creating or editing wiki pages:
 1. Update \`.memoc/wiki/index.md\`.
-2. Append \`.memoc/log.md\`.
+2. Run \`memoc lint-wiki\`.
+3. Append \`.memoc/log.md\`.
+
+Useful scaffolds:
+
+\`\`\`bash
+memoc ingest path/to/source.md
+memoc ingest https://example.com/spec
+memoc note "Auth flow comparison"
+memoc lint-wiki
+\`\`\`
 
 ## Updating System Docs
 
@@ -1232,6 +1488,74 @@ Create a new \`.md\` file here when a subsystem becomes important enough that fu
 `;
 }
 
+function tplRawReadme() {
+  return `# Raw Sources
+
+Immutable source material for the memoc wiki.
+
+## Rules
+
+- Do not edit raw files after ingest; create a new raw file or source record when material changes.
+- Do not read raw files at session start. Search or open the linked source/topic page first.
+- Source records under [wiki/sources](../wiki/sources/README.md) summarize raw material and link to affected topics.
+
+## Subdirectories
+
+- [files](files/README.md) — local files copied during ingest
+- [urls](urls/README.md) — URL references and fetched/exported material
+- [conversations](conversations/README.md) — conversation excerpts worth preserving
+- [docs](docs/README.md) — external docs, specs, and long references
+`;
+}
+
+function tplRawFilesReadme() {
+  return `# Raw Files
+
+Local files copied by \`memoc ingest <path>\`.
+
+## Related
+
+- [Raw Sources](../README.md)
+- [Source Records](../../wiki/sources/README.md)
+`;
+}
+
+function tplRawUrlsReadme() {
+  return `# Raw URLs
+
+URL references recorded by \`memoc ingest <url>\`.
+
+## Related
+
+- [Raw Sources](../README.md)
+- [Source Records](../../wiki/sources/README.md)
+`;
+}
+
+function tplRawConversationsReadme() {
+  return `# Raw Conversations
+
+Conversation excerpts that should feed durable wiki synthesis.
+
+## Related
+
+- [Raw Sources](../README.md)
+- [Source Records](../../wiki/sources/README.md)
+`;
+}
+
+function tplRawDocsReadme() {
+  return `# Raw Docs
+
+Long-form docs, specs, and references kept separate from synthesized topic pages.
+
+## Related
+
+- [Raw Sources](../README.md)
+- [Source Records](../../wiki/sources/README.md)
+`;
+}
+
 function tplWikiIndex() {
   return `# Wiki Index
 
@@ -1239,6 +1563,7 @@ Persistent LLM-maintained project wiki.
 
 ## Graph Hubs
 
+- [Raw Sources](../raw/README.md) — immutable source material before synthesis.
 - [Sources](sources.md) — provenance, ingests, and source-to-topic links.
 - [Topics](topics/README.md) — synthesized topic pages.
 - [Global](global/README.md) — project-wide principles and long-lived direction.
@@ -1249,6 +1574,10 @@ Persistent LLM-maintained project wiki.
 ## Pages
 
 _None yet. Add every wiki page here with a relative Markdown link and one-line summary._
+
+## Saved Queries
+
+_None yet. Use \`memoc note "<title>"\` for durable analysis or query results that should become a topic._
 
 ## Subdirectories
 
@@ -1274,9 +1603,12 @@ Provenance index for conversations, URLs, docs, issues, and files that feed the 
 
 _No sources recorded yet. Link each source record to the topic/global pages it affects._
 
+Use \`memoc ingest <path-or-url>\` to create source records without loading raw material into startup context.
+
 ## Related
 
 - [Wiki Index](index.md)
+- [Raw Sources](../raw/README.md)
 - [Source Records Directory](sources/README.md)
 - [Topics](topics/README.md)
 - [Open Questions](questions.md)
@@ -1326,6 +1658,7 @@ Provenance records for conversations, URLs, docs, and issues.
 
 ## How To Link
 
+- Keep source pages short: summary, raw location, affected pages, open synthesis work.
 - Link each source record back to [Sources](../sources.md).
 - Link outward to every topic, global page, system doc, or question that the source changes.
 - Prefer one source per file when the source is substantial enough to cite later.
@@ -1432,8 +1765,10 @@ Use this local skill after meaningful project work so future agents can continue
 
 ## Maintenance Checklist
 
+- If the user asked to update/refresh memoc project memory, run \`memoc update\` first so managed sections, wiki scaffold links, and Obsidian tags are current.
 - Keep \`llms.txt\` and \`.memoc/00-agent-index.md\` as concise maps.
 - Keep \`.memoc/00-project-brief.md\` as the shortest project summary.
+- Rewrite \`.memoc/session-summary.md\` as the latest snapshot only; never append a timeline. If it is over 800B, run \`memoc trim-summary\`.
 - Update \`.memoc/02-current-project-state.md\` with new status, tasks, commands, and change log entries.
 - Update \`.memoc/03-decisions.md\` when a durable decision is made.
 - Update \`.memoc/04-handoff.md\` before ending substantial work.
@@ -1442,8 +1777,11 @@ Use this local skill after meaningful project work so future agents can continue
 - Append \`.memoc/log.md\` for meaningful changes, decisions, and handoffs.
 - Create or update \`.memoc/systems/*.md\` when a subsystem needs durable explanation.
 - Create or update \`.memoc/wiki/*.md\` when synthesized knowledge should compound over time.
+- Use \`memoc ingest <path-or-url>\` for source material and \`memoc note "<title>"\` for durable query results or analysis.
 - Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, add relative Markdown links between related pages, and include a \`## Related\` section on every new wiki page.
+- Run \`memoc lint-wiki\` after wiki/source/topic edits and address broken links before finishing.
 - Keep completed history in \`.memoc/log.md\`; keep current-state files short.
+- Move completed session details out of \`session-summary.md\` into \`log.md\`; move incomplete/risky resume details into \`04-handoff.md\`.
 - Keep tool output small; prefer \`summary\`, file-only search, \`--limit\`, and targeted reads.
 
 ## Wiki Link Rules
@@ -1640,6 +1978,11 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, 'log.md'),                    tplLog],
       [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
       [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
+      [path.join(memDir, 'raw/README.md'),             tplRawReadme],
+      [path.join(memDir, 'raw/files/README.md'),       tplRawFilesReadme],
+      [path.join(memDir, 'raw/urls/README.md'),        tplRawUrlsReadme],
+      [path.join(memDir, 'raw/conversations/README.md'), tplRawConversationsReadme],
+      [path.join(memDir, 'raw/docs/README.md'),        tplRawDocsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
       [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
       [path.join(memDir, 'wiki/glossary.md'),          tplWikiGlossary],
@@ -1660,6 +2003,9 @@ function run(dir, forceUpdate, action = 'update') {
 
     // .gitignore — add .memoc/.pending if not already present
     ensurePendingGitignore(dir, mark);
+
+    // Obsidian graph filters — tag memoc-owned Markdown without touching unrelated docs
+    ensureObsidianFrontmatter(dir, mark);
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensurePathHelpers(dir, mark);
@@ -1738,6 +2084,11 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, 'log.md'),                    tplLog],
       [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
       [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
+      [path.join(memDir, 'raw/README.md'),             tplRawReadme],
+      [path.join(memDir, 'raw/files/README.md'),       tplRawFilesReadme],
+      [path.join(memDir, 'raw/urls/README.md'),        tplRawUrlsReadme],
+      [path.join(memDir, 'raw/conversations/README.md'), tplRawConversationsReadme],
+      [path.join(memDir, 'raw/docs/README.md'),        tplRawDocsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
       [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
       [path.join(memDir, 'wiki/glossary.md'),          tplWikiGlossary],
@@ -1754,6 +2105,9 @@ function run(dir, forceUpdate, action = 'update') {
       // silently skip existing — user/agent owns them
     }
     ensureWikiScaffoldLinks(memDir, mark);
+
+    // Obsidian graph filters — add/merge memoc tags for existing installs too
+    ensureObsidianFrontmatter(dir, mark);
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensureClaudeStopHookFile(dir, mark);
@@ -1806,6 +2160,338 @@ function runAdd(dir) {
   const result = applyManagedBlock(filePath, () => tplAgentEntry(agent.label));
   console.log(`\n  ${result.padEnd(8)} ${agent.file}  (${agent.label})`);
   console.log('\n  Done.');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// WIKI OPERATIONS — lint, ingest, and durable topic notes
+// ═══════════════════════════════════════════════════════════════════
+
+function runWikiLint(dir) {
+  ensureObsidianFrontmatter(dir, () => {});
+  const wikiDir = path.join(dir, '.memoc', 'wiki');
+  const files = listMarkdownFiles(wikiDir);
+  const issues = [];
+  const warnings = [];
+  const inbound = new Map(files.map(fp => [normRel(dir, fp), 0]));
+
+  for (const fp of files) {
+    const rel = normRel(dir, fp);
+    const src = safeRead(fp);
+    if (!parseYamlFrontmatter(src)) warnings.push(`${rel}: missing YAML frontmatter`);
+    if (!src.includes('memoc/wiki')) warnings.push(`${rel}: missing memoc/wiki tag`);
+    if (!/^## Related\b/m.test(src) && !rel.endsWith('wiki/index.md')) warnings.push(`${rel}: missing ## Related section`);
+
+    for (const link of markdownLinks(src)) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(link) || link.startsWith('#')) continue;
+      const target = resolveMarkdownLink(fp, link);
+      if (!target) continue;
+      if (!fs.existsSync(target)) {
+        issues.push(`${rel}: broken link ${link}`);
+        continue;
+      }
+      const targetRel = normRel(dir, target);
+      if (inbound.has(targetRel)) inbound.set(targetRel, inbound.get(targetRel) + 1);
+    }
+  }
+
+  for (const [rel, count] of inbound.entries()) {
+    if (rel.endsWith('wiki/index.md')) continue;
+    if (count === 0) warnings.push(`${rel}: no inbound wiki links`);
+  }
+
+  const lintPath = path.join(wikiDir, 'lint.md');
+  write(lintPath, wikiLintReport(issues, warnings));
+  ensureMemocFrontmatter(lintPath, dir);
+
+  console.log('\n  memoc lint-wiki\n');
+  console.log(`    Files     ${files.length}`);
+  console.log(`    Issues    ${issues.length}`);
+  console.log(`    Warnings  ${warnings.length}`);
+  console.log('    Report    .memoc/wiki/lint.md');
+  if (issues.length) {
+    console.log('\n  Issues:');
+    for (const issue of issues.slice(0, 10)) console.log(`    - ${issue}`);
+  }
+  if (!issues.length && !warnings.length) console.log('\n  No issues found.');
+  console.log();
+}
+
+function wikiLintReport(issues, warnings) {
+  return `# Wiki Lint
+
+Last checked: ${nowISO()}
+
+## Graph Checks
+
+- Every wiki page is listed from [Wiki Index](index.md) or a directory README.
+- Every wiki page links back to an index, hub, source, topic, or related page.
+- Important concepts mentioned in two or more places have their own linked page.
+- Source records link to the pages they update, and those pages link back to sources when provenance matters.
+
+## Issues
+
+${issues.length ? issues.map(x => `- ${x}`).join('\n') : '_No issues found._'}
+
+## Warnings
+
+${warnings.length ? warnings.map(x => `- ${x}`).join('\n') : '_None._'}
+
+## Related
+
+- [Wiki Index](index.md)
+- [Sources](sources.md)
+- [Topics](topics/README.md)
+- [Open Questions](questions.md)
+`;
+}
+
+function runIngest(dir) {
+  const target = process.argv[3];
+  if (!target) {
+    console.error('\n  Usage: memoc ingest <path-or-url>');
+    process.exit(1);
+  }
+
+  ensureMemocBase(dir);
+  const isUrl = /^[a-z][a-z0-9+.-]*:\/\//i.test(target);
+  const title = ingestTitle(dir, target, isUrl);
+  const slug = `${todayISO()}-${slugify(title, 'source')}`;
+  let rawRef;
+  let rawDisplay;
+
+  if (isUrl) {
+    const rawPath = uniquePath(path.join(dir, '.memoc', 'raw', 'urls', `${slug}.md`));
+    write(rawPath, rawUrlRecord(title, target));
+    ensureMemocFrontmatter(rawPath, dir);
+    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'sources'), rawPath);
+    rawDisplay = normRel(dir, rawPath);
+  } else {
+    const abs = path.resolve(dir, target);
+    if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) {
+      console.error(`\n  Source file not found: ${target}`);
+      process.exit(1);
+    }
+    const ext = path.extname(abs) || '.txt';
+    const rawPath = uniquePath(path.join(dir, '.memoc', 'raw', 'files', `${slug}${ext}`));
+    fs.mkdirSync(path.dirname(rawPath), { recursive: true });
+    fs.copyFileSync(abs, rawPath);
+    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'sources'), rawPath);
+    rawDisplay = normRel(dir, rawPath);
+  }
+
+  const sourcePath = uniquePath(path.join(dir, '.memoc', 'wiki', 'sources', `${slug}.md`));
+  write(sourcePath, sourceRecord(title, rawRef, target, isUrl));
+  ensureMemocFrontmatter(sourcePath, dir);
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'Source Records', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'needs synthesis');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources', 'README.md'), 'Source Records', path.basename(sourcePath), title, 'source record');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Pages', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'source record');
+  appendMemocLog(dir, `ingest | Added source record ${normRel(dir, sourcePath)} from ${isUrl ? target : normRel(dir, path.resolve(dir, target))}.`);
+
+  console.log('\n  memoc ingest\n');
+  console.log(`    Source record  ${normRel(dir, sourcePath)}`);
+  console.log(`    Raw reference  ${rawDisplay}`);
+  console.log('    Next           Synthesize affected topics, then run memoc lint-wiki.');
+  console.log();
+}
+
+function runNote(dir) {
+  const rawArgs = process.argv.slice(3);
+  const bodyIndex = rawArgs.indexOf('--body');
+  let body = '';
+  let titleArgs = rawArgs;
+  if (bodyIndex !== -1) {
+    titleArgs = rawArgs.slice(0, bodyIndex);
+    body = rawArgs.slice(bodyIndex + 1).join(' ');
+  }
+  const title = titleArgs.join(' ').trim();
+  if (!title) {
+    console.error('\n  Usage: memoc note "<topic title>" [--body "short note"]');
+    process.exit(1);
+  }
+
+  ensureMemocBase(dir);
+  const topicPath = uniquePath(path.join(dir, '.memoc', 'wiki', 'topics', `${slugify(title, 'topic')}.md`));
+  write(topicPath, topicNote(title, body));
+  ensureMemocFrontmatter(topicPath, dir);
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'topics', 'README.md'), 'Topic Pages', path.basename(topicPath), title, 'topic note');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Saved Queries', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), topicPath), title, 'saved query/topic note');
+  appendMemocLog(dir, `note | Saved wiki topic ${normRel(dir, topicPath)}.`);
+
+  console.log('\n  memoc note\n');
+  console.log(`    Topic  ${normRel(dir, topicPath)}`);
+  console.log('    Next   Link related sources/topics, then run memoc lint-wiki.');
+  console.log();
+}
+
+function ensureMemocBase(dir) {
+  const p = scanProject(dir);
+  const memDir = path.join(dir, '.memoc');
+  const files = [
+    [path.join(memDir, 'wiki/index.md'), tplWikiIndex],
+    [path.join(memDir, 'wiki/sources.md'), tplWikiSources],
+    [path.join(memDir, 'wiki/sources/README.md'), tplWikiSourcesReadme],
+    [path.join(memDir, 'wiki/topics/README.md'), tplWikiTopicsReadme],
+    [path.join(memDir, 'raw/README.md'), tplRawReadme],
+    [path.join(memDir, 'raw/files/README.md'), tplRawFilesReadme],
+    [path.join(memDir, 'raw/urls/README.md'), tplRawUrlsReadme],
+    [path.join(memDir, 'log.md'), tplLog],
+    [path.join(memDir, '00-agent-index.md'), () => tplAgentIndex(p)],
+  ];
+  for (const [fp, tpl] of files) ensure(fp, tpl());
+  ensureObsidianFrontmatter(dir, () => {});
+}
+
+function ingestTitle(dir, target, isUrl) {
+  if (isUrl) {
+    try {
+      const u = new URL(target);
+      return path.basename(u.pathname) || u.hostname;
+    } catch {
+      return target;
+    }
+  }
+  try {
+    const src = fs.readFileSync(path.resolve(dir, target), 'utf8');
+    return markdownTitle(src, path.basename(target, path.extname(target)));
+  } catch {
+    return path.basename(target, path.extname(target));
+  }
+}
+
+function rawUrlRecord(title, url) {
+  return `# ${title}
+
+Original URL: ${url}
+
+This raw URL record stores provenance only. Summarize it in a source record before using it as durable project knowledge.
+`;
+}
+
+function sourceRecord(title, rawRef, original, isUrl) {
+  return `# ${title}
+
+## Source
+
+- Raw: [${isUrl ? 'URL record' : 'raw file'}](${rawRef})
+- Original: ${original}
+- Ingested: ${nowISO()}
+
+## Summary
+
+_Summarize only the durable facts future agents should reuse._
+
+## Affects
+
+- [Sources](../sources.md)
+- [Topics](../topics/README.md)
+- [Open Questions](../questions.md)
+
+## Synthesis Tasks
+
+- [ ] Create or update affected topic/global/system pages.
+- [ ] Link those pages back to this source when provenance matters.
+- [ ] Run \`memoc lint-wiki\`.
+
+## Related
+
+- [Sources Index](../sources.md)
+- [Source Records](README.md)
+- [Wiki Index](../index.md)
+`;
+}
+
+function topicNote(title, body) {
+  return `# ${title}
+
+## Summary
+
+${body ? `- ${body}` : '_Capture the durable answer, analysis, or query result here._'}
+
+## Evidence
+
+- [Sources](../sources.md)
+
+## Open Questions
+
+_None yet._
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Topics](README.md)
+- [Glossary](../glossary.md)
+`;
+}
+
+function listMarkdownFiles(root) {
+  const files = [];
+  function walk(d) {
+    if (!fs.existsSync(d)) return;
+    for (const entry of fs.readdirSync(d)) {
+      const fp = path.join(d, entry);
+      try {
+        const st = fs.statSync(fp);
+        if (st.isDirectory()) walk(fp);
+        else if (entry.endsWith('.md')) files.push(fp);
+      } catch {}
+    }
+  }
+  walk(root);
+  return files.sort();
+}
+
+function safeRead(fp) {
+  try { return fs.readFileSync(fp, 'utf8'); } catch { return ''; }
+}
+
+function normRel(dir, fp) {
+  return path.relative(dir, fp).replace(/\\/g, '/');
+}
+
+function pathRelativeMarkdown(fromDir, toFile) {
+  let rel = path.relative(fromDir, toFile).replace(/\\/g, '/');
+  if (!rel.startsWith('.')) rel = `./${rel}`;
+  return rel;
+}
+
+function markdownLinks(src) {
+  const links = [];
+  const re = /!?\[[^\]]*]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  let m;
+  while ((m = re.exec(src))) links.push(m[1]);
+  return links;
+}
+
+function resolveMarkdownLink(fromFile, link) {
+  const clean = decodeURIComponent(String(link).split('#')[0]);
+  if (!clean) return null;
+  const base = path.resolve(path.dirname(fromFile), clean);
+  if (path.extname(base)) return base;
+  if (fs.existsSync(`${base}.md`)) return `${base}.md`;
+  return base;
+}
+
+function addWikiListItem(filePath, heading, link, title, note) {
+  const src = safeRead(filePath);
+  if (!src) return;
+  if (src.includes(`](${link})`) || src.includes(`](${link.replace(/^\.\//, '')})`)) return;
+  const item = `- [${title}](${link.replace(/^\.\//, '')}) — ${note}.`;
+  const re = new RegExp(`(## ${escapeRegExp(heading)}\\n)([\\s\\S]*?)(?=\\n## |$)`, 'm');
+  const m = src.match(re);
+  if (!m) {
+    write(filePath, `${src.trimEnd()}\n\n## ${heading}\n\n${item}\n`);
+    return;
+  }
+  const replacementBody = m[2].includes('_None yet') || m[2].includes('_No sources recorded yet')
+    ? `\n${item}\n`
+    : `${m[2].trimEnd()}\n${item}\n`;
+  write(filePath, src.replace(re, `$1${replacementBody}`));
+}
+
+function appendMemocLog(dir, text) {
+  const fp = path.join(dir, '.memoc', 'log.md');
+  ensure(fp, tplLog());
+  fs.appendFileSync(fp, `\n## [${nowISO()}] ${text}\n`, 'utf8');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1971,6 +2657,8 @@ function shouldSkipSearchDir(name, scope = 'memory') {
     skipped.add('.memoc');
     skipped.add('skills');
     skipped.add('.claude');
+  } else {
+    skipped.add('raw');
   }
   return skipped.has(name);
 }
@@ -2082,7 +2770,7 @@ function runTokens(dir) {
   const summaryContent = read(path.join(memDir, 'session-summary.md'));
   const summaryBytes   = Buffer.byteLength(summaryContent, 'utf8');
   if (summaryBytes > 800) {
-    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Trim it manually.`);
+    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Run \`memoc trim-summary\`, then move completed history to log.md and resume details to 04-handoff.md.`);
   }
   console.log();
 }
@@ -2132,6 +2820,92 @@ function runCompress(dir) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// TRIM SUMMARY — keep startup memory small and move bulky text aside
+// ═══════════════════════════════════════════════════════════════════
+
+function runTrimSummary(dir) {
+  const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+  const archivePath = path.join(dir, '.memoc', 'session-summary-archive.md');
+  if (!fs.existsSync(summaryPath)) {
+    write(summaryPath, tplSessionSummary());
+    console.log('\n  memoc trim-summary\n');
+    console.log('    Added .memoc/session-summary.md');
+    console.log('\n  Done.\n');
+    return;
+  }
+
+  const src = fs.readFileSync(summaryPath, 'utf8');
+  const beforeBytes = Buffer.byteLength(src, 'utf8');
+  const compact = compactSessionSummary(src);
+  const afterBytes = Buffer.byteLength(compact, 'utf8');
+
+  if (src === compact && beforeBytes <= 800) {
+    console.log('\n  memoc trim-summary\n');
+    console.log(`    session-summary.md is already compact (${beforeBytes}B).`);
+    console.log('\n  Done.\n');
+    return;
+  }
+
+  const archiveHeader = fs.existsSync(archivePath)
+    ? ''
+    : '# Session Summary Archive\n\nOlder oversized startup summaries moved by `memoc trim-summary`.\n';
+  fs.appendFileSync(archivePath, `${archiveHeader}\n## [${nowISO()}] archived summary (${beforeBytes}B)\n\n${src.trimEnd()}\n`, 'utf8');
+  write(summaryPath, compact);
+  appendMemocLog(dir, `trim-summary | Archived oversized session summary (${beforeBytes}B → ${afterBytes}B).`);
+
+  console.log('\n  memoc trim-summary\n');
+  console.log(`    Archived  .memoc/session-summary-archive.md`);
+  console.log(`    Rewrote   .memoc/session-summary.md (${beforeBytes}B → ${afterBytes}B)`);
+  console.log('    Reminder  Completed history belongs in log.md; resume details belong in 04-handoff.md.');
+  console.log('\n  Done.\n');
+}
+
+function compactSessionSummary(src) {
+  const sections = ['Status', 'Changed', 'Open Tasks', 'Resume'];
+  const lines = [
+    '# Session Summary',
+    `Last: ${nowISO()}`,
+    'Replace this file instead of appending to it. Keep total size <800B and each section ≤3 bullets.',
+    'Completed history belongs in `log.md`; incomplete/risky resume detail belongs in `04-handoff.md`.',
+    '',
+  ];
+
+  for (const heading of sections) {
+    lines.push(`## ${heading}`);
+    const bullets = compactSummaryBullets(sectionText(src, heading));
+    if (bullets.length) lines.push(...bullets);
+    else lines.push(summaryPlaceholder(heading));
+    lines.push('');
+  }
+
+  return lines.join('\n').trimEnd() + '\n';
+}
+
+function sectionText(src, heading) {
+  const re = new RegExp(`(?:^|\\n)## ${escapeRegExp(heading)}\\n([\\s\\S]*?)(?=\\n## |$)`);
+  const m = String(src || '').match(re);
+  return m ? m[1].trim() : '';
+}
+
+function compactSummaryBullets(text) {
+  return String(text || '')
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(line => line && !line.startsWith('#') && !/^_.*_$/.test(line))
+    .map(line => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 3)
+    .map(line => `- ${line.length > 140 ? `${line.slice(0, 137)}...` : line}`);
+}
+
+function summaryPlaceholder(heading) {
+  if (heading === 'Status') return '_Current state in 1-3 bullets._';
+  if (heading === 'Changed') return '_Recent durable changes only._';
+  if (heading === 'Open Tasks') return '_Current open tasks only._';
+  return '_Where the next agent should resume._';
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SUMMARY
 // ═══════════════════════════════════════════════════════════════════
 
@@ -2147,7 +2921,7 @@ function runSummary(dir) {
   }
 
   function section(src, heading) {
-    const re = new RegExp(`^## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`, 'm');
+    const re = new RegExp(`(?:^|\\n)## ${heading}\\n([\\s\\S]*?)(?=\\n## |$)`);
     const m = src.match(re);
     return m ? m[1].trim() : '';
   }
@@ -2205,10 +2979,14 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  upgrade            Refresh memoc runtime/wrappers and managed sections; preserve memory');
   console.log('  summary            Print a tiny status/resume overview');
   console.log('  tokens             Estimate token cost of current memory files');
+  console.log('  trim-summary       Archive and compact oversized session-summary.md');
   console.log('  compress           Archive old log.md entries to keep file small');
   console.log('  add <agent>        Add entry file for a specific agent (run without args to list)');
   console.log('  search "<query>"   Search memory/agent docs (use --snippets for line matches)');
   console.log('  grep "<query>"     Search project source/text files (use --snippets for line matches)');
+  console.log('  ingest <path|url>  Create a raw/source record scaffold for wiki synthesis');
+  console.log('  note "<title>"     Save a durable topic/query-result scaffold');
+  console.log('  lint-wiki          Check wiki links, tags, backlinks, and Related sections');
   console.log('\nSearch flags:');
   console.log('  --files            Show file names and match counts, sorted by relevance + recency (default)');
   console.log('  --snippets         Show matching lines');
@@ -2224,10 +3002,14 @@ if (cmd === 'update')   { run(cwd, true, 'update');    process.exit(0); }
 if (cmd === 'upgrade')  { run(cwd, true, 'upgrade');   process.exit(0); }
 if (cmd === 'summary')  { runSummary(cwd);    process.exit(0); }
 if (cmd === 'tokens')   { runTokens(cwd);     process.exit(0); }
+if (cmd === 'trim-summary') { runTrimSummary(cwd); process.exit(0); }
 if (cmd === 'compress') { runCompress(cwd);   process.exit(0); }
 if (cmd === 'add')      { runAdd(cwd);        process.exit(0); }
 if (cmd === 'search')   { runSearch(cwd, 'memory');  process.exit(0); }
 if (cmd === 'grep')     { runSearch(cwd, 'project'); process.exit(0); }
+if (cmd === 'ingest')   { runIngest(cwd);     process.exit(0); }
+if (cmd === 'note')     { runNote(cwd);       process.exit(0); }
+if (cmd === 'lint-wiki') { runWikiLint(cwd);  process.exit(0); }
 
 console.error(`Unknown command: ${cmd}`);
 console.error('Run "memoc --help" for usage.');

@@ -93,8 +93,17 @@ npx @kevin0181/memoc search "auth" --snippets --limit 5
 npx @kevin0181/memoc grep "GetParticles"
 npx @kevin0181/memoc grep "GetParticles" --snippets --limit 5
 
+# Create raw/source records and durable wiki topic notes
+npx @kevin0181/memoc ingest path/to/source.md
+npx @kevin0181/memoc ingest https://example.com/spec
+npx @kevin0181/memoc note "Auth flow comparison"
+npx @kevin0181/memoc lint-wiki
+
 # Estimate token cost of current memory files
 npx @kevin0181/memoc tokens
+
+# Archive and compact an oversized startup summary
+npx @kevin0181/memoc trim-summary
 
 # Archive old log entries to keep log.md small
 npx @kevin0181/memoc compress
@@ -156,6 +165,7 @@ llms.txt                                     ← LLM-facing project map
   04-handoff.md                              ← Resume context, verified/unverified
   06-project-rules.md                        ← User preferences
   log.md                                     ← Append-only activity log
+  raw/                                       ← Immutable source material, not a startup read
   systems/                                   ← Subsystem docs
   wiki/                                      ← Synthesized knowledge base
 
@@ -201,6 +211,8 @@ Startup cost is kept minimal by design.
 | **Total startup** | **~430** |
 
 Everything else is on-demand. Use `memoc tokens` to see the live breakdown for your project.
+
+`session-summary.md` is a replace-only startup snapshot, not a timeline. If it grows beyond the warning threshold, run `memoc trim-summary`; completed history belongs in `.memoc/log.md`, and unfinished/risky resume detail belongs in `.memoc/04-handoff.md`.
 
 ---
 

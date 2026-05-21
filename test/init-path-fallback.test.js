@@ -348,7 +348,13 @@ test('init creates an Obsidian-friendly connected wiki scaffold', () => {
     const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'utf8');
     const agentIndex = fs.readFileSync(path.join(dir, '.memoc', '00-agent-index.md'), 'utf8');
     const skill = fs.readFileSync(path.join(dir, 'skills', 'project-memory-maintainer', 'SKILL.md'), 'utf8');
+    const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
+    const usage = fs.readFileSync(path.join(dir, '.memoc', 'memoc-usage.md'), 'utf8');
 
+    assert.match(wikiIndex, /^---\nmemoc: true\n/m);
+    assert.match(wikiIndex, /  - memoc\/wiki/);
+    assert.match(topics, /  - memoc\/topic/);
+    assert.match(agentIndex, /  - memoc\/core/);
     assert.match(wikiIndex, /\[Sources\]\(sources\.md\)/);
     assert.match(wikiIndex, /\[Topics\]\(topics\/README\.md\)/);
     assert.match(wikiIndex, /\[Agent Index\]\(\.\.\/00-agent-index\.md\)/);
@@ -358,6 +364,9 @@ test('init creates an Obsidian-friendly connected wiki scaffold', () => {
     assert.match(agentIndex, /\[Wiki Lint\]\(wiki\/lint\.md\)/);
     assert.match(skill, /Keep the wiki graph connected/);
     assert.match(skill, /relative Markdown links/);
+    assert.match(agents, /run `memoc update` first/);
+    assert.match(usage, /applies Obsidian frontmatter tags/);
+    assert.match(skill, /Obsidian tags are current/);
   });
 });
 
@@ -405,7 +414,143 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
 
     assert.match(wikiIndex, /## Graph Hubs/);
     assert.match(wikiIndex, /\[Wiki Lint\]\(lint\.md\)/);
+    assert.match(glossary, /^---\nmemoc: true\n/m);
+    assert.match(glossary, /  - memoc\/glossary/);
     assert.match(glossary, /User-owned term should stay/);
     assert.doesNotMatch(glossary, /\[Wiki Index\]\(index\.md\)/);
+  });
+});
+
+test('wiki operations scaffold raw sources, source records, notes, and lint report', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const docPath = path.join(dir, 'design-note.md');
+    fs.writeFileSync(docPath, '# Renderer Design\n\nThe renderer has a staged pipeline.\n', 'utf8');
+
+    const ingestOutput = execFileSync(process.execPath, [cliPath, 'ingest', 'design-note.md'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+    assert.match(ingestOutput, /memoc ingest/);
+    assert.match(ingestOutput, /\.memoc\/wiki\/sources\/\d{4}-\d{2}-\d{2}-renderer-design\.md/);
+
+    const sourceFiles = fs.readdirSync(path.join(dir, '.memoc', 'wiki', 'sources'))
+      .filter(f => f.endsWith('renderer-design.md'));
+    assert.equal(sourceFiles.length, 1);
+    const sourceRecord = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'sources', sourceFiles[0]), 'utf8');
+    assert.match(sourceRecord, /type: wiki/);
+    assert.match(sourceRecord, /status: needs-synthesis/);
+    assert.match(sourceRecord, /  - memoc\/source/);
+    assert.match(sourceRecord, /\[raw file\]\(\.\.\/\.\.\/raw\/files\//);
+
+    const rawFiles = fs.readdirSync(path.join(dir, '.memoc', 'raw', 'files'))
+      .filter(f => f.endsWith('renderer-design.md'));
+    assert.equal(rawFiles.length, 1);
+
+    const noteOutput = execFileSync(process.execPath, [cliPath, 'note', 'Renderer pipeline findings', '--body', 'Pipeline knowledge should persist.'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+    assert.match(noteOutput, /memoc note/);
+    const topic = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'topics', 'renderer-pipeline-findings.md'), 'utf8');
+    assert.match(topic, /  - memoc\/topic/);
+    assert.match(topic, /Pipeline knowledge should persist/);
+
+    const lintOutput = execFileSync(process.execPath, [cliPath, 'lint-wiki'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+    assert.match(lintOutput, /memoc lint-wiki/);
+    const lint = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'lint.md'), 'utf8');
+    assert.match(lint, /## Graph Checks/);
+    assert.match(lint, /Last checked:/);
+
+    const index = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
+    assert.match(index, /Renderer Design/);
+    assert.match(index, /Renderer pipeline findings/);
+  });
+});
+
+test('memory search skips raw ingested material but finds source summaries', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    fs.writeFileSync(path.join(dir, 'raw-secret.md'), '# Raw Only\n\nneedle-raw-only\n', 'utf8');
+    execFileSync(process.execPath, [cliPath, 'ingest', 'raw-secret.md'], { cwd: dir, encoding: 'utf8', env });
+
+    const output = execFileSync(process.execPath, [cliPath, 'search', 'needle-raw-only', '--snippets', '--limit', '5'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+    assert.doesNotMatch(output, /\.memoc[\\/]raw[\\/]files/);
+    assert.match(output, /No matches found/);
+  });
+});
+
+test('trim-summary archives oversized startup summary and rewrites compact snapshot', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const summaryPath = path.join(dir, '.memoc', 'session-summary.md');
+    fs.writeFileSync(
+      summaryPath,
+      [
+        '# Session Summary',
+        'Last: old',
+        '',
+        '## Status',
+        ...Array.from({ length: 12 }, (_, i) => `- status detail ${i} ${'x'.repeat(120)}`),
+        '',
+        '## Changed',
+        ...Array.from({ length: 8 }, (_, i) => `- changed detail ${i} ${'y'.repeat(120)}`),
+        '',
+        '## Open Tasks',
+        '- task one',
+        '',
+        '## Resume',
+        '- resume here',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    const output = execFileSync(process.execPath, [cliPath, 'trim-summary'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+
+    const compact = fs.readFileSync(summaryPath, 'utf8');
+    const archive = fs.readFileSync(path.join(dir, '.memoc', 'session-summary-archive.md'), 'utf8');
+    const log = fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8');
+
+    assert.match(output, /memoc trim-summary/);
+    assert.ok(Buffer.byteLength(compact, 'utf8') < 1200);
+    assert.equal((compact.match(/status detail/g) || []).length, 3);
+    assert.equal((compact.match(/changed detail/g) || []).length, 3);
+    assert.match(archive, /status detail 11/);
+    assert.match(log, /trim-summary \| Archived oversized session summary/);
   });
 });
