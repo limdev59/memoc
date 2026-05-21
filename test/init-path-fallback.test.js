@@ -329,3 +329,83 @@ test('search stays memory-scoped while grep finds source code matches', () => {
     assert.match(projectOutput, /GetParticles/);
   });
 });
+
+test('init creates an Obsidian-friendly connected wiki scaffold', () => {
+  withTempProject(dir => {
+    execFileSync(process.execPath, [cliPath, 'init'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        MEMOC_SKIP_PATH_REGISTER: '1',
+        MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+        MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      },
+    });
+
+    const wikiIndex = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
+    const topics = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'topics', 'README.md'), 'utf8');
+    const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'utf8');
+    const agentIndex = fs.readFileSync(path.join(dir, '.memoc', '00-agent-index.md'), 'utf8');
+    const skill = fs.readFileSync(path.join(dir, 'skills', 'project-memory-maintainer', 'SKILL.md'), 'utf8');
+
+    assert.match(wikiIndex, /\[Sources\]\(sources\.md\)/);
+    assert.match(wikiIndex, /\[Topics\]\(topics\/README\.md\)/);
+    assert.match(wikiIndex, /\[Agent Index\]\(\.\.\/00-agent-index\.md\)/);
+    assert.match(topics, /\[Wiki Index\]\(\.\.\/index\.md\)/);
+    assert.match(topics, /Avoid orphan pages/);
+    assert.match(sources, /\[Open Questions\]\(questions\.md\)/);
+    assert.match(agentIndex, /\[Wiki Lint\]\(wiki\/lint\.md\)/);
+    assert.match(skill, /Keep the wiki graph connected/);
+    assert.match(skill, /relative Markdown links/);
+  });
+});
+
+test('upgrade refreshes default wiki scaffold links without overwriting user wiki pages', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'wiki', 'index.md'),
+      [
+        '# Wiki Index',
+        '',
+        'Persistent LLM-maintained project wiki.',
+        '',
+        '## Pages',
+        '',
+        '_None yet._',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'wiki', 'glossary.md'),
+      [
+        '# Glossary',
+        '',
+        '## Terms',
+        '',
+        '- User-owned term should stay.',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+
+    execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
+
+    const wikiIndex = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
+    const glossary = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'glossary.md'), 'utf8');
+
+    assert.match(wikiIndex, /## Graph Hubs/);
+    assert.match(wikiIndex, /\[Wiki Lint\]\(lint\.md\)/);
+    assert.match(glossary, /User-owned term should stay/);
+    assert.doesNotMatch(glossary, /\[Wiki Index\]\(index\.md\)/);
+  });
+});

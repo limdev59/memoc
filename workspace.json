@@ -1,0 +1,195 @@
+{
+  "main": {
+    "id": "c819c2db8879fc60",
+    "type": "split",
+    "children": [
+      {
+        "id": "210760a8129dc757",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "d2584eaa6195fbe0",
+            "type": "leaf",
+            "state": {
+              "type": "terminal-view",
+              "state": {
+                "tabs": [
+                  {
+                    "name": "Terminal 1",
+                    "color": "",
+                    "cwd": "/Users/neneee/dev/rcodex",
+                    "bufferSerial": "neneee@neneeeui-MacBookPro rcodex % git status\r\nOn branch main\r\nYour branch is up to date with 'origin/main'.\r\n\r\nChanges not staged for commit:\r\n  (use \"git add <file>...\" to update what will be committed)\r\n  (use \"git restore <file>...\" to discard changes in working directory)\r\n\u001b[8C\u001b[31mmodified:   package-lock.json\r\n\r\n\u001b[0mno changes added to commit (use \"git add\" and/or \"git commit -a\")\r\nneneee@neneeeui-MacBookPro rcodex % rcodex \r\nzsh: command not found: rcodex\r\nneneee@neneeeui-MacBookPro rcodex % npm run dev -- migrate\r\n\r\n> @kevin0181/rcodex@0.0.14 dev\r\n> tsx src/index.ts migrate\r\n\r\n\r\n[rcodex]\r\n  Migrating Codex threads -> \"rcodex\"...\r\n--------------------------------------------------\r\n[error] Codex is running. Close it completely and try again.\r\nneneee@neneeeui-MacBookPro rcodex % npm run dev -- migrate\r\n\r\n> @kevin0181/rcodex@0.0.14 dev\r\n> tsx src/index.ts migrate\r\n\r\n\r\n[rcodex]\r\n  Migrating Codex threads -> \"rcodex\"...\r\n--------------------------------------------------\r\n[ok] Threads migrated -> \"rcodex\": 0 DB rows, 0 session files\r\n--------------------------------------------------\r\n\r\nDone.\r\nneneee@neneeeui-MacBookPro rcodex % npm run dev -- gateway\r\n\r\n> @kevin0181/rcodex@0.0.14 dev\r\n> tsx src/index.ts gateway\r\n\r\n\r\n[rcodex]\r\n[ok] Config: ~/.codex/config.toml\r\n[ok] Provider: rcodex -> rcodex Gateway (http://localhost:3142/v1)\r\n  Models are managed at the gateway web UI. Run 'rcodex' if not already running.\r\n[ok] Config saved: ~/.codex/config.toml\r\n--------------------------------------------------\r\n[ok] Threads migrated -> \"rcodex\": 0 DB rows, 0 session files\r\n\r\nDone.\r\nneneee@neneeeui-MacBookPro rcodex % npm run dev -- openai \r\n\r\n> @kevin0181/rcodex@0.0.14 dev\r\n> tsx src/index.ts openai\r\n\r\n\r\n[rcodex]\r\n[ok] Config: ~/.codex/config.toml\r\n[ok] Provider: native OpenAI (https://api.openai.com)\r\n[ok] Model: gpt-5.5\r\n  Bypassing rcodex Gateway; using Codex built-in OpenAI auth.\r\n[ok] Config saved: ~/.codex/config.toml\r\n--------------------------------------------------\r\n[ok] Threads migrated -> \"openai\": 71 DB rows, 71 session files\r\n\r\nDone.\r\nneneee@neneeeui-MacBookPro rcodex % npm run build\r\n\r\n> @kevin0181/rcodex@0.0.14 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\nneneee@neneeeui-MacBookPro rcodex % npm run dev\r\n\r\n> @kevin0181/rcodex@0.0.14 dev\r\n> tsx src/index.ts\r\n\r\n\r\n[rcodex]\r\n  Starting gateway in background...\r\n[ok] Config updated: rcodex -> http://localhost:3142/v1 (new)\r\n  Restarting Codex...\r\n[ok] Codex launched\r\n[ok] Gateway UI: http://localhost:3142\r\n  Run 'rcodex stop' to shut down the gateway.\r\nneneee@neneeeui-MacBookPro rcodex % \u001b[7;1m%\u001b[0m                                                                                            \r\nneneee@neneeeui-MacBookPro rcodex % git status\r\nOn branch main\r\nYour branch is ahead of 'origin/main' by 2 commits.\r\n  (use \"git push\" to publish your local commits)\r\n\r\nChanges not staged for commit:\r\n  (use \"git add <file>...\" to update what will be committed)\r\n  (use \"git restore <file>...\" to discard changes in working directory)\r\n\u001b[8C\u001b[31mmodified:   package-lock.json\r\n\u001b[8Cmodified:   package.json\r\n\r\n\u001b[0mno changes added to commit (use \"git add\" and/or \"git commit -a\")\r\nneneee@neneeeui-MacBookPro rcodex % git add .\r\nneneee@neneeeui-MacBookPro rcodex % git commit -m \"update : version update 0.0.14 -> 0.0.15\"\r\n[main b25143d] update : version update 0.0.14 -> 0.0.15\r\n 2 files changed, 2 insertions(+), 1 deletion(-)\r\nneneee@neneeeui-MacBookPro rcodex % git push\r\nEnumerating objects: 29, done.\r\nCounting objects: 100% (29/29), done.\r\nDelta compression using up to 8 threads\r\nCompressing objects: 100% (20/20), done.\r\nWriting objects: 100% (20/20), 4.75 KiB | 4.75 MiB/s, done.\r\nTotal 20 (delta 17), reused 0 (delta 0), pack-reused 0 (from 0)\r\nremote: Resolving deltas: 100% (17/17), completed with 9 local objects.\r\nTo https://github.com/neneee0181/rcodex.git\r\n   602c2ec..b25143d  main -> main\r\nneneee@neneeeui-MacBookPro rcodex % npm publish --access publish\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94minvalid config\u001b[0m access=\"publish\" set in command line options\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94minvalid config\u001b[0m Must be one of: null, restricted, public\r\n\r\n> @kevin0181/rcodex@0.0.15 prepublishOnly\r\n> npm run build\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 prepare\r\n> npm run build\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m npm auto-corrected some errors in your package.json when publishing.  Please run \"npm pkg fix\" to address these errors.\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m errors corrected:\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m \"bin[rcodex]\" script name dist/index.js was invalid and removed\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 📦  @kevin0181/rcodex@0.0.15\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m \u001b[94mTarball Contents\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.1kB LICENSE\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.3kB README.md\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 88B dist/commands/doctor.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 166B dist/commands/doctor.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.7kB dist/commands/doctor.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.4kB dist/commands/doctor.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 103B dist/commands/gateway-daemon.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 184B dist/commands/gateway-daemon.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.9kB dist/commands/gateway-daemon.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.1kB dist/commands/gateway-daemon.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 88B dist/commands/launch.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 167B dist/commands/launch.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.6kB dist/commands/launch.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/commands/launch.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 303B dist/commands/migrate.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 343B dist/commands/migrate.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.9kB dist/commands/migrate.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.3kB dist/commands/migrate.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 86B dist/commands/setup.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 165B dist/commands/setup.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.1kB dist/commands/setup.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/commands/setup.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 84B dist/commands/stop.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 162B dist/commands/stop.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 651B dist/commands/stop.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 684B dist/commands/stop.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 161B dist/commands/switch.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 227B dist/commands/switch.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.2kB dist/commands/switch.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/commands/switch.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 158B dist/commands/sync.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 231B dist/commands/sync.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.7kB dist/commands/sync.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.4kB dist/commands/sync.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 334B dist/core/codex.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 366B dist/core/codex.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.4kB dist/core/codex.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.0kB dist/core/codex.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 433B dist/core/config.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 436B dist/core/config.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/core/config.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.6kB dist/core/config.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 219B dist/core/constants.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 219B dist/core/constants.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 414B dist/core/constants.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 286B dist/core/constants.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 161B dist/core/ollama.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 216B dist/core/ollama.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 685B dist/core/ollama.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 946B dist/core/ollama.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/gateway/auth.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/gateway/auth.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.9kB dist/gateway/auth.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.3kB dist/gateway/auth.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 734B dist/gateway/providers/anthropic.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 850B dist/gateway/providers/anthropic.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.1kB dist/gateway/providers/anthropic.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.8kB dist/gateway/providers/anthropic.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 820B dist/gateway/providers/antigravity-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 793B dist/gateway/providers/antigravity-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.7kB dist/gateway/providers/antigravity-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.6kB dist/gateway/providers/antigravity-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 864B dist/gateway/providers/antigravity.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 914B dist/gateway/providers/antigravity.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.2kB dist/gateway/providers/antigravity.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.3kB dist/gateway/providers/antigravity.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 629B dist/gateway/providers/claude-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 686B dist/gateway/providers/claude-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.3kB dist/gateway/providers/claude-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 6.1kB dist/gateway/providers/claude-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 894B dist/gateway/providers/copilot.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 925B dist/gateway/providers/copilot.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/gateway/providers/copilot.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.0kB dist/gateway/providers/copilot.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 631B dist/gateway/providers/google.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 643B dist/gateway/providers/google.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.3kB dist/gateway/providers/google.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.5kB dist/gateway/providers/google.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 619B dist/gateway/providers/ollama.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 712B dist/gateway/providers/ollama.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.8kB dist/gateway/providers/ollama.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/gateway/providers/ollama.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 586B dist/gateway/providers/openai-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 642B dist/gateway/providers/openai-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 6.0kB dist/gateway/providers/openai-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.3kB dist/gateway/providers/openai-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 789B dist/gateway/providers/openai.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 877B dist/gateway/providers/openai.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.6kB dist/gateway/providers/openai.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.2kB dist/gateway/providers/openai.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.2kB dist/gateway/proxy.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.5kB dist/gateway/proxy.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 104.2kB dist/gateway/proxy.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 93.9kB dist/gateway/proxy.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 190B dist/gateway/server.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 262B dist/gateway/server.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 56.1kB dist/gateway/server.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 46.0kB dist/gateway/server.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 87B dist/gateway/ui.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 163B dist/gateway/ui.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 120.9kB dist/gateway/ui.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.0kB dist/gateway/ui.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 66B dist/index.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 104B dist/index.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.7kB dist/index.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/index.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 634B dist/types/index.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 777B dist/types/index.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 44B dist/types/index.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 111B dist/types/index.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 251B dist/utils/logger.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 189B dist/utils/logger.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 504B dist/utils/logger.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 727B dist/utils/logger.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 198B dist/utils/paths.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 235B dist/utils/paths.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 668B dist/utils/paths.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 907B dist/utils/paths.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 288B dist/utils/shell.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 366B dist/utils/shell.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 907B dist/utils/shell.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.2kB dist/utils/shell.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 108B dist/utils/updates.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 168B dist/utils/updates.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.3kB dist/utils/updates.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.6kB dist/utils/updates.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.5kB package.json\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.3kB scripts/postinstall.cjs\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m \u001b[94mTarball Details\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m name: @kevin0181/rcodex\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m version: 0.0.15\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m filename: kevin0181-rcodex-0.0.15.tgz\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m package size: 157.7 kB\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m unpacked size: 682.1 kB\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m shasum: 779549d7bbb2777d332a226e18351fa04b69c653\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m integrity: sha512-Kep0nCRkOmXsD[...]1mx4GJBt27GeQ==\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m total files: 128\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m Publishing to https://registry.npmjs.org/ with tag latest and default access\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94mcode\u001b[0m E404\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\u001b[0m Not Found - PUT https://registry.npmjs.org/@kevin0181%2frcodex - Not found\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\r\n\u001b[39;1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\u001b[0m  The requested resource '@kevin0181/rcodex@0.0.15' could not be found or you do not have permission to access it.\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\r\n\u001b[39;1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\u001b[0m Note that you can also install from a\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m \u001b[94m404\u001b[0m tarball, folder, http url, or git url.\r\n\u001b[1mnpm\u001b[0m \u001b[31merror\u001b[0m A complete log of this run can be found in: /Users/neneee/.npm/_logs/2026-05-21T03_23_08_648Z-debug-0.log\r\nneneee@neneeeui-MacBookPro rcodex % npm login\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m Log in on https://registry.npmjs.org/\r\nLogin at:\r\nhttps://www.npmjs.com/login?next=/login/cli/5710b904-a586-438f-a35d-9654bcdb0957\r\nPress ENTER to open in the browser...\r\nLogged in on https://registry.npmjs.org/.\r\nneneee@neneeeui-MacBookPro rcodex % npm publish --access public \r\n\r\n> @kevin0181/rcodex@0.0.15 prepublishOnly\r\n> npm run build\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 prepare\r\n> npm run build\r\n\r\n\r\n> @kevin0181/rcodex@0.0.15 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m npm auto-corrected some errors in your package.json when publishing.  Please run \"npm pkg fix\" to address these errors.\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m errors corrected:\r\n\u001b[1mnpm\u001b[0m \u001b[33mwarn\u001b[0m \u001b[94mpublish\u001b[0m \"bin[rcodex]\" script name dist/index.js was invalid and removed\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 📦  @kevin0181/rcodex@0.0.15\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m \u001b[94mTarball Contents\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.1kB LICENSE\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.3kB README.md\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 88B dist/commands/doctor.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 166B dist/commands/doctor.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.7kB dist/commands/doctor.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.4kB dist/commands/doctor.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 103B dist/commands/gateway-daemon.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 184B dist/commands/gateway-daemon.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.9kB dist/commands/gateway-daemon.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.1kB dist/commands/gateway-daemon.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 88B dist/commands/launch.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 167B dist/commands/launch.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.6kB dist/commands/launch.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/commands/launch.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 303B dist/commands/migrate.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 343B dist/commands/migrate.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.9kB dist/commands/migrate.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.3kB dist/commands/migrate.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 86B dist/commands/setup.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 165B dist/commands/setup.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.1kB dist/commands/setup.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/commands/setup.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 84B dist/commands/stop.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 162B dist/commands/stop.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 651B dist/commands/stop.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 684B dist/commands/stop.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 161B dist/commands/switch.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 227B dist/commands/switch.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.2kB dist/commands/switch.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/commands/switch.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 158B dist/commands/sync.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 231B dist/commands/sync.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.7kB dist/commands/sync.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.4kB dist/commands/sync.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 334B dist/core/codex.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 366B dist/core/codex.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.4kB dist/core/codex.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.0kB dist/core/codex.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 433B dist/core/config.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 436B dist/core/config.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/core/config.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.6kB dist/core/config.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 219B dist/core/constants.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 219B dist/core/constants.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 414B dist/core/constants.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 286B dist/core/constants.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 161B dist/core/ollama.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 216B dist/core/ollama.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 685B dist/core/ollama.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 946B dist/core/ollama.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/gateway/auth.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.4kB dist/gateway/auth.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.9kB dist/gateway/auth.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.3kB dist/gateway/auth.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 734B dist/gateway/providers/anthropic.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 850B dist/gateway/providers/anthropic.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.1kB dist/gateway/providers/anthropic.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.8kB dist/gateway/providers/anthropic.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 820B dist/gateway/providers/antigravity-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 793B dist/gateway/providers/antigravity-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.7kB dist/gateway/providers/antigravity-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.6kB dist/gateway/providers/antigravity-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 864B dist/gateway/providers/antigravity.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 914B dist/gateway/providers/antigravity.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.2kB dist/gateway/providers/antigravity.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.3kB dist/gateway/providers/antigravity.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 629B dist/gateway/providers/claude-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 686B dist/gateway/providers/claude-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 7.3kB dist/gateway/providers/claude-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 6.1kB dist/gateway/providers/claude-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 894B dist/gateway/providers/copilot.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 925B dist/gateway/providers/copilot.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/gateway/providers/copilot.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.0kB dist/gateway/providers/copilot.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 631B dist/gateway/providers/google.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 643B dist/gateway/providers/google.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.3kB dist/gateway/providers/google.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.5kB dist/gateway/providers/google.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 619B dist/gateway/providers/ollama.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 712B dist/gateway/providers/ollama.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.8kB dist/gateway/providers/ollama.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.4kB dist/gateway/providers/ollama.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 586B dist/gateway/providers/openai-oauth-flow.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 642B dist/gateway/providers/openai-oauth-flow.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 6.0kB dist/gateway/providers/openai-oauth-flow.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 5.3kB dist/gateway/providers/openai-oauth-flow.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 789B dist/gateway/providers/openai.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 877B dist/gateway/providers/openai.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 9.6kB dist/gateway/providers/openai.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 8.2kB dist/gateway/providers/openai.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.2kB dist/gateway/proxy.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 3.5kB dist/gateway/proxy.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 104.2kB dist/gateway/proxy.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 93.9kB dist/gateway/proxy.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 190B dist/gateway/server.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 262B dist/gateway/server.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 56.1kB dist/gateway/server.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 46.0kB dist/gateway/server.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 87B dist/gateway/ui.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 163B dist/gateway/ui.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 120.9kB dist/gateway/ui.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.0kB dist/gateway/ui.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 66B dist/index.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 104B dist/index.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.7kB dist/index.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 2.8kB dist/index.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 634B dist/types/index.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 777B dist/types/index.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 44B dist/types/index.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 111B dist/types/index.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 251B dist/utils/logger.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 189B dist/utils/logger.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 504B dist/utils/logger.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 727B dist/utils/logger.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 198B dist/utils/paths.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 235B dist/utils/paths.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 668B dist/utils/paths.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 907B dist/utils/paths.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 288B dist/utils/shell.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 366B dist/utils/shell.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 907B dist/utils/shell.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.2kB dist/utils/shell.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 108B dist/utils/updates.d.ts\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 168B dist/utils/updates.d.ts.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.3kB dist/utils/updates.js\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 4.6kB dist/utils/updates.js.map\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.5kB package.json\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m 1.3kB scripts/postinstall.cjs\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m \u001b[94mTarball Details\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m name: @kevin0181/rcodex\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m version: 0.0.15\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m filename: kevin0181-rcodex-0.0.15.tgz\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m package size: 157.7 kB\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m unpacked size: 682.1 kB\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m shasum: 779549d7bbb2777d332a226e18351fa04b69c653\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m integrity: sha512-Kep0nCRkOmXsD[...]1mx4GJBt27GeQ==\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\u001b[0m total files: 128\r\n\u001b[1mnpm\u001b[0m \u001b[96mnotice\r\n\u001b[39;1mnpm\u001b[0m \u001b[96mnotice\u001b[0m Publishing to https://registry.npmjs.org/ with tag latest and public access\r\nAuthenticate your account at:\r\nhttps://www.npmjs.com/auth/cli/27a473e2-1cfe-4a36-ad01-26db85ac4cfd\r\nPress ENTER to open in the browser...\r\n+ @kevin0181/rcodex@0.0.15\r\nneneee@neneeeui-MacBookPro rcodex % npm run build\r\n\r\n> @kevin0181/rcodex@0.0.15 build\r\n> tsc && node -e \"if(process.platform!=='win32')require('child_process').execSync('chmod +x dist/index.js')\"\r\n\r\nneneee@neneeeui-MacBookPro rcodex % \u001b[?2004h"
+                  }
+                ],
+                "activeIndex": 0
+              },
+              "icon": "terminal",
+              "title": "Terminal"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "3e5a58b1296b2223",
+    "type": "split",
+    "children": [
+      {
+        "id": "2946a3c2b89b01e8",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "25d7e89967565ef7",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "파일 탐색기"
+            }
+          },
+          {
+            "id": "23217b35d7cc61cb",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "검색"
+            }
+          },
+          {
+            "id": "55d72298b94f94f7",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "북마크"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "7f7ca2bf77592574",
+    "type": "split",
+    "children": [
+      {
+        "id": "17cc04e96ea94fc1",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "4e7eda407ec17fe0",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "백링크"
+            }
+          },
+          {
+            "id": "361bfac433bea2b1",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "나가는 링크"
+            }
+          },
+          {
+            "id": "3896495fad6b02bc",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "태그"
+            }
+          },
+          {
+            "id": "c168f033ae47c000",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "모든 속성"
+            }
+          },
+          {
+            "id": "3fcc496604d2406f",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "개요"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:빠른 전환기 열기": false,
+      "graph:그래프 뷰 열기": false,
+      "canvas:새 캔버스 만들기": false,
+      "daily-notes:오늘의 일일 노트 열기": false,
+      "templates:템플릿 삽입": false,
+      "command-palette:명령어 팔레트 열기": false,
+      "bases:새 베이스 생성하기": false,
+      "lean-terminal:Open terminal": false,
+      "vscode-editor:Create Code File": false
+    }
+  },
+  "active": "d2584eaa6195fbe0",
+  "lastOpenFiles": [
+    "package.json"
+  ]
+}

@@ -298,6 +298,25 @@ function writeIfChanged(filePath, content) {
   return 'update';
 }
 
+function writeIfDefaultish(filePath, content, isDefaultish) {
+  if (!fs.existsSync(filePath)) {
+    write(filePath, content);
+    return 'add';
+  }
+  let src = '';
+  try { src = fs.readFileSync(filePath, 'utf8'); } catch { return 'skip'; }
+  if (!isDefaultish(src)) return 'skip';
+  if (src === content) return 'skip';
+  write(filePath, content);
+  return 'update';
+}
+
+function hasOnlyScaffold(src, required) {
+  if (!required.every(part => src.includes(part))) return false;
+  const nonEmpty = src.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  return nonEmpty.length <= 16;
+}
+
 function ensurePathRegistration(dir, mark) {
   ensureCurrentPathLauncher(mark);
   const binDir = ensureUserLauncher(mark);
@@ -669,6 +688,59 @@ function wikiLlmsInner(dir) {
   return lines.length ? lines.join('\n') : '_None yet._';
 }
 
+function wikiScaffoldFiles(memDir) {
+  return [
+    [
+      path.join(memDir, 'wiki/index.md'),
+      tplWikiIndex,
+      src => src.includes('# Wiki Index') && src.includes('Persistent LLM-maintained project wiki') &&
+        (src.includes('_None yet._') || !src.includes('## Graph Hubs')),
+    ],
+    [
+      path.join(memDir, 'wiki/sources.md'),
+      tplWikiSources,
+      src => hasOnlyScaffold(src, ['# Sources', '_No sources recorded yet._']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/glossary.md'),
+      tplWikiGlossary,
+      src => hasOnlyScaffold(src, ['# Glossary', '_No terms defined yet._']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/questions.md'),
+      tplWikiQuestions,
+      src => hasOnlyScaffold(src, ['# Open Questions', '_No open questions yet._']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/lint.md'),
+      tplWikiLint,
+      src => src.includes('# Wiki Lint') && src.includes('_No issues found._') && !src.includes('## Graph Checks'),
+    ],
+    [
+      path.join(memDir, 'wiki/sources/README.md'),
+      tplWikiSourcesReadme,
+      src => hasOnlyScaffold(src, ['# Sources', 'Provenance records']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/topics/README.md'),
+      tplWikiTopicsReadme,
+      src => hasOnlyScaffold(src, ['# Topics', 'Synthesized topic pages']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/global/README.md'),
+      tplWikiGlobalReadme,
+      src => hasOnlyScaffold(src, ['# Global', 'Project-wide principles']) && !src.includes('## Related'),
+    ],
+  ];
+}
+
+function ensureWikiScaffoldLinks(memDir, mark) {
+  for (const [fp, tpl, isDefaultish] of wikiScaffoldFiles(memDir)) {
+    const result = writeIfDefaultish(fp, tpl(), isDefaultish);
+    if (result !== 'skip') mark(result, `${path.relative(path.dirname(memDir), fp)} (wiki links)`);
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════
 // TEMPLATES — entry files
 // ═══════════════════════════════════════════════════════════════════
@@ -810,7 +882,11 @@ _None yet. Add entries when subsystems are documented._
 
 ## Wiki
 
-_None yet. Add entries when wiki pages are created._
+- [Wiki Index](wiki/index.md) — hub for every synthesized wiki page.
+- [Sources](wiki/sources.md) — source provenance and ingest notes.
+- [Glossary](wiki/glossary.md) — project terms and aliases.
+- [Open Questions](wiki/questions.md) — unresolved knowledge gaps.
+- [Wiki Lint](wiki/lint.md) — orphan, stale, and contradiction checks.
 `;
 }
 
@@ -1161,26 +1237,181 @@ function tplWikiIndex() {
 
 Persistent LLM-maintained project wiki.
 
+## Graph Hubs
+
+- [Sources](sources.md) — provenance, ingests, and source-to-topic links.
+- [Topics](topics/README.md) — synthesized topic pages.
+- [Global](global/README.md) — project-wide principles and long-lived direction.
+- [Glossary](glossary.md) — terms, aliases, and canonical page names.
+- [Open Questions](questions.md) — unresolved questions and research leads.
+- [Wiki Lint](lint.md) — graph health, orphan checks, contradictions, stale claims.
+
 ## Pages
 
-_None yet._
+_None yet. Add every wiki page here with a relative Markdown link and one-line summary._
 
 ## Subdirectories
 
-- \`sources/\` — provenance records
-- \`topics/\` — synthesized topic pages
-- \`global/\` — project-wide principles
+- [sources/](sources/README.md) — provenance records
+- [topics/](topics/README.md) — synthesized topic pages
+- [global/](global/README.md) — project-wide principles
+
+## Related Core Memory
+
+- [Agent Index](../00-agent-index.md)
+- [Project Brief](../00-project-brief.md)
+- [Current Project State](../02-current-project-state.md)
+- [Project Log](../log.md)
 `;
 }
 
-function tplWikiSources()       { return `# Sources\n\n_No sources recorded yet._\n`; }
-function tplWikiGlossary()      { return `# Glossary\n\n_No terms defined yet._\n`; }
-function tplWikiQuestions()     { return `# Open Questions\n\n_No open questions yet._\n`; }
-function tplWikiSourcesReadme() { return `# Sources\n\nProvenance records for conversations, URLs, docs, and issues.\n`; }
-function tplWikiTopicsReadme()  { return `# Topics\n\nSynthesized topic pages that compound knowledge across sessions.\n`; }
-function tplWikiGlobalReadme()  { return `# Global\n\nProject-wide principles, positioning, and long-lived direction.\n`; }
+function tplWikiSources() {
+  return `# Sources
+
+Provenance index for conversations, URLs, docs, issues, and files that feed the wiki.
+
+## Source Records
+
+_No sources recorded yet. Link each source record to the topic/global pages it affects._
+
+## Related
+
+- [Wiki Index](index.md)
+- [Source Records Directory](sources/README.md)
+- [Topics](topics/README.md)
+- [Open Questions](questions.md)
+`;
+}
+
+function tplWikiGlossary() {
+  return `# Glossary
+
+Canonical names, aliases, and short definitions for project terms.
+
+## Terms
+
+_No terms defined yet. Link terms to their canonical topic, global, source, or system page._
+
+## Related
+
+- [Wiki Index](index.md)
+- [Topics](topics/README.md)
+- [Global](global/README.md)
+- [Open Questions](questions.md)
+`;
+}
+
+function tplWikiQuestions() {
+  return `# Open Questions
+
+Unresolved questions, data gaps, contradictions, and follow-up research leads.
+
+## Questions
+
+_No open questions yet. Link each question to affected pages and sources._
+
+## Related
+
+- [Wiki Index](index.md)
+- [Sources](sources.md)
+- [Topics](topics/README.md)
+- [Wiki Lint](lint.md)
+`;
+}
+
+function tplWikiSourcesReadme() {
+  return `# Sources
+
+Provenance records for conversations, URLs, docs, and issues.
+
+## How To Link
+
+- Link each source record back to [Sources](../sources.md).
+- Link outward to every topic, global page, system doc, or question that the source changes.
+- Prefer one source per file when the source is substantial enough to cite later.
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Sources](../sources.md)
+- [Topics](../topics/README.md)
+- [Open Questions](../questions.md)
+`;
+}
+
+function tplWikiTopicsReadme() {
+  return `# Topics
+
+Synthesized topic pages that compound knowledge across sessions.
+
+## Topic Pages
+
+_None yet. Add pages here when a concept deserves durable synthesis._
+
+## How To Link
+
+- Each topic page should link back to [Wiki Index](../index.md) and this [Topics](README.md) page.
+- Link to related topics, source records, glossary terms, and open questions in prose or a \`## Related\` section.
+- Avoid orphan pages: every topic needs at least one inbound link from an index, source, or related topic.
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Sources](../sources.md)
+- [Glossary](../glossary.md)
+- [Wiki Lint](../lint.md)
+`;
+}
+
+function tplWikiGlobalReadme() {
+  return `# Global
+
+Project-wide principles, positioning, and long-lived direction.
+
+## Global Pages
+
+_None yet. Add pages here for broad context that many topic/system pages should reference._
+
+## How To Link
+
+- Link global pages back to [Wiki Index](../index.md), this [Global](README.md) page, and affected topic/system docs.
+- Use global pages for durable synthesis, not temporary task notes.
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Project Brief](../../00-project-brief.md)
+- [Project Rules](../../06-project-rules.md)
+- [Topics](../topics/README.md)
+`;
+}
 function tplWikiLint()          {
-  return `# Wiki Lint\n\nLast checked: ${nowISO()}\n\n## Issues\n\n_No issues found._\n\n## Warnings\n\n_None._\n`;
+  return `# Wiki Lint
+
+Last checked: ${nowISO()}
+
+## Graph Checks
+
+- Every wiki page is listed from [Wiki Index](index.md) or a directory README.
+- Every wiki page links back to an index, hub, source, topic, or related page.
+- Important concepts mentioned in two or more places have their own linked page.
+- Source records link to the pages they update, and those pages link back to sources when provenance matters.
+
+## Issues
+
+_No issues found._
+
+## Warnings
+
+_None._
+
+## Related
+
+- [Wiki Index](index.md)
+- [Sources](sources.md)
+- [Topics](topics/README.md)
+- [Open Questions](questions.md)
+`;
 }
 
 function tplSkillMaintainer() {
@@ -1211,8 +1442,18 @@ Use this local skill after meaningful project work so future agents can continue
 - Append \`.memoc/log.md\` for meaningful changes, decisions, and handoffs.
 - Create or update \`.memoc/systems/*.md\` when a subsystem needs durable explanation.
 - Create or update \`.memoc/wiki/*.md\` when synthesized knowledge should compound over time.
+- Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, add relative Markdown links between related pages, and include a \`## Related\` section on every new wiki page.
 - Keep completed history in \`.memoc/log.md\`; keep current-state files short.
 - Keep tool output small; prefer \`summary\`, file-only search, \`--limit\`, and targeted reads.
+
+## Wiki Link Rules
+
+- Use relative Markdown links that Obsidian can follow, for example \`[Glossary](glossary.md)\` or \`[Topics](topics/README.md)\`.
+- Every wiki page must have at least one inbound link from \`wiki/index.md\`, a directory README, a source page, or a related topic.
+- Every wiki page must link outward to its parent hub plus 1-5 genuinely related pages when they exist.
+- Prefer links in normal prose when the connection is meaningful; use \`## Related\` for compact navigation.
+- When a concept appears in multiple pages, create or update a topic/glossary page and link all mentions to it.
+- After wiki edits, check \`.memoc/wiki/lint.md\` and note orphan pages, missing backlinks, contradictions, or stale claims.
 
 ## Concrete Triggers
 
@@ -1512,6 +1753,7 @@ function run(dir, forceUpdate, action = 'update') {
       if (ensure(fp, tpl())) mark('add', rel);
       // silently skip existing — user/agent owns them
     }
+    ensureWikiScaffoldLinks(memDir, mark);
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensureClaudeStopHookFile(dir, mark);
