@@ -144,7 +144,7 @@ Run it from the project root. It preserves existing project memory, including:
 - `.memoc/systems/`
 - `.memoc/wiki/`
 
-It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and missing template files. If `memoc` is not on PATH after upgrading, keep using:
+It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and memoc-owned protocol templates. User-owned memory files such as `session-summary.md`, `03-decisions.md`, `04-handoff.md`, `06-project-rules.md`, and wiki topic/source pages are preserved. If `memoc` is not on PATH after upgrading, keep using:
 
 ```bash
 # Windows
@@ -277,7 +277,7 @@ Actor detection order:
 
 `activity.md`, `actors/README.md`, and `worklog/README.md` are regenerated indexes. Run `memoc activity --write` when you want to refresh them from worklog files.
 
-`log.md` is legacy. New installs do not create it, and shared activity should live in worklog files. Existing projects can delete `.memoc/log.md` after preserving any useful history in worklogs or archives.
+`log.md` is legacy. New installs do not create it, and shared activity should live in worklog files. On upgrade, an existing `.memoc/log.md` is moved to `.memoc/raw/legacy-log.md` so old history is preserved but no longer part of the normal memory flow.
 
 ---
 

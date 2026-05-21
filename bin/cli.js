@@ -209,6 +209,12 @@ function write(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
+function writeChanged(filePath, content) {
+  if (fs.existsSync(filePath) && fs.readFileSync(filePath, 'utf8') === content) return false;
+  write(filePath, content);
+  return true;
+}
+
 function slugify(value, fallback = 'note') {
   const slug = String(value || '')
     .toLowerCase()
@@ -226,6 +232,35 @@ function uniquePath(filePath) {
   let i = 2;
   while (fs.existsSync(`${base}-${i}${ext}`)) i += 1;
   return `${base}-${i}${ext}`;
+}
+
+function archiveLegacyLog(dir, mark) {
+  const logPath = path.join(dir, '.memoc', 'log.md');
+  if (!fs.existsSync(logPath)) {
+    mark('skip', '.memoc/log.md (legacy; no file)');
+    return;
+  }
+  const archivePath = uniquePath(path.join(dir, '.memoc', 'raw', 'legacy-log.md'));
+  fs.mkdirSync(path.dirname(archivePath), { recursive: true });
+  fs.renameSync(logPath, archivePath);
+  mark('move', `${path.relative(dir, logPath)} -> ${path.relative(dir, archivePath)}`);
+}
+
+function migrateLegacyLogReferences(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  const before = fs.readFileSync(filePath, 'utf8');
+  let after = before
+    .replace(/- \[Project Log\]\(log\.md\)\n/g, '- [Activity](activity.md)\n- [Worklog](worklog/README.md)\n')
+    .replace(/\| `\.memoc\/log\.md` \| For append-only history \|\n/g, '| `.memoc/activity.md` | Generated worklog index |\n| `.memoc/worklog/` | Actor-scoped work history |\n')
+    .replace(/See `\.memoc\/log\.md` for full history\./g, 'See `.memoc/worklog/` for full shared activity history.')
+    .replace(/See `\.memoc\/log\.md`\./g, 'See `.memoc/worklog/` and generated `.memoc/activity.md`.')
+    .replace(/- \[ \] `\.memoc\/log\.md` has a new entry for meaningful work\./g, '- [ ] Meaningful shared work has a `.memoc/worklog/<actor>/YYYY-MM/*.md` entry.')
+    .replace(/Append `\.memoc\/log\.md` for meaningful changes, decisions, and handoffs\./g, 'Create a short actor worklog with `memoc work "<title>" --from-git` for meaningful changes, decisions, and handoffs.')
+    .replace(/Keep completed history in `\.memoc\/log\.md`; keep current-state files short\./g, 'Keep completed history in actor worklogs; keep current-state files short.')
+    .replace(/Append `\.memoc\/log\.md`\./g, 'If the change is meaningful shared work, run `memoc work "<title>" --from-git`.');
+  if (after === before) return false;
+  write(filePath, after);
+  return true;
 }
 
 function markdownTitle(src, fallback) {
@@ -2252,10 +2287,18 @@ function run(dir, forceUpdate, action = 'update') {
       mark('add', 'llms.txt');
     }
 
-    // Dynamic memory files — update managed sections only
+    // Generated memory maps — replace so old protocols do not linger.
+    const generatedRefresh = [
+      [path.join(memDir, '00-project-brief.md'),       () => tplProjectBrief(p)],
+      [path.join(memDir, '00-agent-index.md'),         () => tplAgentIndex(p)],
+    ];
+    for (const [fp, tpl] of generatedRefresh) {
+      const rel = path.relative(dir, fp);
+      mark(writeChanged(fp, tpl()) ? 'update' : 'skip', rel);
+    }
+
+    // Dynamic user-owned memory files — update managed sections only
     const dynUpdates = [
-      [path.join(memDir, '00-project-brief.md'),       () => tplProjectBrief(p),   ID_S,   ID_E,   identityInner(p)],
-      [path.join(memDir, '00-agent-index.md'),         () => tplAgentIndex(p),     SNAP_S, SNAP_E, snapshotInner(p)],
       [path.join(memDir, '02-current-project-state.md'), () => tplCurrentState(p), SNAP_S, SNAP_E, snapshotInner(p)],
     ];
     for (const [fp, tpl, s, e, inner] of dynUpdates) {
@@ -2283,18 +2326,27 @@ function run(dir, forceUpdate, action = 'update') {
       mark('add', '.memoc/session-summary.md');
     }
 
-    // Static + user-owned files — only add if missing
-    const addIfMissing = [
+    // Protocol/template files — replace on update so old instructions are removed.
+    const templateRefresh = [
       [path.join(memDir, 'boot.md'),                   tplBoot],
       [path.join(memDir, '01-agent-workflow.md'),      tplWorkflow],
+      [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
+      [path.join(memDir, 'memoc-usage.md'),            tplMemocUsage],
+      [path.join(dir,    'skills/project-memory-maintainer/SKILL.md'), tplSkillMaintainer],
+    ];
+    for (const [fp, tpl] of templateRefresh) {
+      const rel = path.relative(dir, fp);
+      mark(writeChanged(fp, tpl()) ? 'update' : 'skip', rel);
+    }
+
+    // Static indexes/scaffolds — add if missing; content may be user- or command-owned.
+    const addIfMissing = [
       [path.join(memDir, '03-decisions.md'),           tplDecisions],
       [path.join(memDir, '04-handoff.md'),             tplHandoff],
-      [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
       [path.join(memDir, '06-project-rules.md'),       tplProjectRules],
       [path.join(memDir, 'activity.md'),               tplActivity],
       [path.join(memDir, 'actors/README.md'),          tplActorsReadme],
       [path.join(memDir, 'worklog/README.md'),         tplWorklogReadme],
-      [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
       [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
       [path.join(memDir, 'raw/README.md'),             tplRawReadme],
       [path.join(memDir, 'raw/files/README.md'),       tplRawFilesReadme],
@@ -2309,7 +2361,6 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, 'wiki/sources/README.md'),    tplWikiSourcesReadme],
       [path.join(memDir, 'wiki/topics/README.md'),     tplWikiTopicsReadme],
       [path.join(memDir, 'wiki/global/README.md'),     tplWikiGlobalReadme],
-      [path.join(dir,    'skills/project-memory-maintainer/SKILL.md'), tplSkillMaintainer],
     ];
     for (const [fp, tpl] of addIfMissing) {
       const rel = path.relative(dir, fp);
@@ -2318,8 +2369,20 @@ function run(dir, forceUpdate, action = 'update') {
     }
     ensureWikiScaffoldLinks(memDir, mark);
 
-    // Obsidian graph filters — add/merge memoc tags for existing installs too
-    ensureObsidianFrontmatter(dir, mark);
+    const legacyReferenceFiles = [
+      path.join(memDir, '02-current-project-state.md'),
+      path.join(memDir, '04-handoff.md'),
+      path.join(memDir, '06-project-rules.md'),
+      path.join(memDir, 'systems/README.md'),
+      path.join(memDir, 'wiki/index.md'),
+      path.join(memDir, 'wiki/sources.md'),
+      path.join(memDir, 'wiki/glossary.md'),
+      path.join(memDir, 'wiki/questions.md'),
+      path.join(memDir, 'wiki/lint.md'),
+    ];
+    for (const fp of legacyReferenceFiles) {
+      if (migrateLegacyLogReferences(fp)) mark('update', `${path.relative(dir, fp)} (legacy refs)`);
+    }
 
     // PATH helpers — let agents run memoc even when the npm bin is not on PATH
     ensureClaudeStopHookFile(dir, mark);
@@ -2327,7 +2390,10 @@ function run(dir, forceUpdate, action = 'update') {
     ensurePathHelpers(dir, mark);
     ensurePathRegistration(dir, mark);
 
-    mark('skip', '.memoc/log.md (legacy; shared history belongs in worklog)');
+    archiveLegacyLog(dir, mark);
+
+    // Obsidian graph filters — add/merge memoc tags for existing installs too
+    ensureObsidianFrontmatter(dir, mark);
   }
 
   hideOnWindows(memDir);

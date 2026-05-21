@@ -247,6 +247,10 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     const decisionsPath = path.join(dir, '.memoc', '03-decisions.md');
     fs.writeFileSync(summaryPath, '# Session Summary\n\n## Status\n- keep this memory\n', 'utf8');
     fs.appendFileSync(decisionsPath, '\n## 2026-05-20\n- Preserve user decisions.\n', 'utf8');
+    fs.writeFileSync(path.join(dir, '.memoc', 'log.md'), '# Project Log\n\n## old\n- Preserve this legacy history.\n', 'utf8');
+    fs.writeFileSync(path.join(dir, '.memoc', '05-done-checklist.md'), '# Done Checklist\n\n- [ ] `.memoc/log.md` has a new entry for meaningful work.\n', 'utf8');
+    fs.writeFileSync(path.join(dir, '.memoc', 'memoc-usage.md'), '# memoc Usage\n\n1. Work.\n2. Append `.memoc/log.md`.\n', 'utf8');
+    fs.writeFileSync(path.join(dir, 'skills/project-memory-maintainer/SKILL.md'), '# Project Memory Maintainer\n\n- Append `.memoc/log.md` for meaningful changes, decisions, and handoffs.\n- Keep completed history in `.memoc/log.md`; keep current-state files short.\n', 'utf8');
     fs.writeFileSync(path.join(runtimeDir, 'package.json'), JSON.stringify({ version: '0.0.1' }), 'utf8');
 
     const output = execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
@@ -256,6 +260,10 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     assert.match(fs.readFileSync(decisionsPath, 'utf8'), /Preserve user decisions/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')).version, pkg.version);
     assert.equal(fs.existsSync(path.join(dir, '.memoc', 'log.md')), false);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'raw', 'legacy-log.md'), 'utf8'), /Preserve this legacy history/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', '05-done-checklist.md'), 'utf8'), /worklog\/<actor>\/YYYY-MM/);
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, '.memoc', 'memoc-usage.md'), 'utf8'), /Append `\.memoc\/log\.md`/);
+    assert.doesNotMatch(fs.readFileSync(path.join(dir, 'skills/project-memory-maintainer/SKILL.md'), 'utf8'), /Append `\.memoc\/log\.md`|completed history in `\.memoc\/log\.md`/);
   });
 });
 
@@ -622,7 +630,7 @@ test('upgrade repairs nested frontmatter produced by older BOM handling', () => 
     const skill = fs.readFileSync(skillPath, 'utf8');
     assert.equal((skill.match(/^---$/gm) || []).length, 2);
     assert.match(skill, /name: project-memory-maintainer/);
-    assert.match(skill, /description: Existing skill/);
+    assert.match(skill, /description: Maintain this project's LLM-wiki memory files/);
     assert.match(skill, /  - memoc\/skill/);
     assert.doesNotMatch(skill, /\uFEFF/);
   });
