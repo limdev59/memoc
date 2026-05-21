@@ -113,7 +113,7 @@ npx @kevin0181/memoc tokens
 # Archive and compact an oversized startup summary
 npx @kevin0181/memoc trim-summary
 
-# Archive old log entries to keep log.md small
+# Legacy: archive old log.md entries before deleting/migrating log.md
 npx @kevin0181/memoc compress
 
 # Add the same protocol to another agent's entry file
@@ -140,7 +140,7 @@ Run it from the project root. It preserves existing project memory, including:
 - `.memoc/03-decisions.md`
 - `.memoc/04-handoff.md`
 - `.memoc/06-project-rules.md`
-- `.memoc/log.md`
+- Legacy `.memoc/log.md` if present
 - `.memoc/systems/`
 - `.memoc/wiki/`
 
@@ -172,7 +172,6 @@ llms.txt                                     ← LLM-facing project map
   03-decisions.md                            ← Durable decision log
   04-handoff.md                              ← Resume context, verified/unverified
   06-project-rules.md                        ← User preferences
-  log.md                                     ← Append-only activity log
   activity.md                                ← Short shared activity index
   actors/                                    ← Actor profiles for shared repos
   worklog/                                   ← Per-actor work records to reduce conflicts
@@ -223,7 +222,7 @@ Startup cost is kept minimal by design.
 
 Everything else is on-demand. Use `memoc tokens` to see the live breakdown for your project.
 
-`session-summary.md` is a replace-only startup snapshot, not a timeline. If it grows beyond the warning threshold, run `memoc trim-summary`; completed history belongs in `.memoc/log.md`, and unfinished/risky resume detail belongs in `.memoc/04-handoff.md`.
+`session-summary.md` is a replace-only startup snapshot, not a timeline. If it grows beyond the warning threshold, run `memoc trim-summary`; completed history belongs in `.memoc/worklog/<actor>/YYYY-MM/`, and unfinished/risky resume detail belongs in `.memoc/04-handoff.md`.
 
 ---
 
@@ -258,7 +257,7 @@ Running `update` refreshes managed blocks in all existing agent files.
 
 ## Shared Repos
 
-Use `memoc work "<title>" --from-git` for meaningful work in shared repositories. It creates a new actor-scoped file under `.memoc/worklog/YYYY-MM/`, prefills branch and changed files from git, and avoids append conflicts in shared files like `log.md`.
+Use `memoc work "<title>" --from-git` for meaningful work in shared repositories. It creates a new actor-scoped file under `.memoc/worklog/<actor>/YYYY-MM/`, prefills branch and changed files from git, and avoids append conflicts in shared files.
 
 Actor detection order:
 
@@ -271,6 +270,8 @@ Actor detection order:
 `.memoc/local/` is ignored by git so each machine can keep its own actor setting.
 
 `activity.md`, `actors/README.md`, and `worklog/README.md` are regenerated indexes. Run `memoc activity --write` when you want to refresh them from worklog files.
+
+`log.md` is legacy. New installs do not create it, and shared activity should live in worklog files. Existing projects can delete `.memoc/log.md` after preserving any useful history in worklogs or archives.
 
 ---
 
@@ -287,7 +288,7 @@ Node.js · Next.js · React · Vue · Svelte · Angular · Nuxt · Astro · Expr
 - **New project** — scaffolds all memory files with sensible defaults.
 - **Existing project** — detects your stack and fills in real project info (name, scripts, config files).
 - **Already initialized** — `init` injects the managed block without touching your existing content. `update` re-scans and refreshes project-specific sections.
-- **Long-running projects** — run `compress` to archive old `log.md` entries when the file grows large.
+- **Long-running projects** — use actor worklogs for history; `compress` remains only for old `log.md` files.
 
 ---
 

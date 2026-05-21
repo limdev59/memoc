@@ -255,7 +255,7 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     assert.match(fs.readFileSync(summaryPath, 'utf8'), /keep this memory/);
     assert.match(fs.readFileSync(decisionsPath, 'utf8'), /Preserve user decisions/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')).version, pkg.version);
-    assert.doesNotMatch(fs.readFileSync(path.join(dir, '.memoc', 'log.md'), 'utf8'), /upgrade \| Re-scanned/);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'log.md')), false);
   });
 });
 
@@ -653,13 +653,15 @@ test('actor commands use local override and work creates conflict-light activity
       env,
     });
     assert.match(workOutput, /Actor\s+neneee/);
-    assert.match(workOutput, /\.memoc\/worklog\/\d{4}-\d{2}\//);
+    assert.match(workOutput, /\.memoc\/worklog\/neneee\/\d{4}-\d{2}\//);
 
-    const monthDirs = fs.readdirSync(path.join(dir, '.memoc', 'worklog')).filter(name => /^\d{4}-\d{2}$/.test(name));
+    const actorDirs = fs.readdirSync(path.join(dir, '.memoc', 'worklog')).filter(name => name === 'neneee');
+    assert.equal(actorDirs.length, 1);
+    const monthDirs = fs.readdirSync(path.join(dir, '.memoc', 'worklog', 'neneee')).filter(name => /^\d{4}-\d{2}$/.test(name));
     assert.equal(monthDirs.length, 1);
-    const entries = fs.readdirSync(path.join(dir, '.memoc', 'worklog', monthDirs[0])).filter(name => name.includes('auth-refresh-fix'));
+    const entries = fs.readdirSync(path.join(dir, '.memoc', 'worklog', 'neneee', monthDirs[0])).filter(name => name.includes('auth-refresh-fix'));
     assert.equal(entries.length, 1);
-    const work = fs.readFileSync(path.join(dir, '.memoc', 'worklog', monthDirs[0], entries[0]), 'utf8');
+    const work = fs.readFileSync(path.join(dir, '.memoc', 'worklog', 'neneee', monthDirs[0], entries[0]), 'utf8');
     assert.match(work, /type: worklog/);
     assert.match(work, /  - memoc\/worklog/);
     assert.match(work, /actor: neneee/);

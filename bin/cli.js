@@ -749,7 +749,7 @@ function managedBlock() {
 - [ ] Wiki/systems work? Read \`skills/project-memory-maintainer/SKILL.md\`
 - [ ] User asked to update memoc/project memory? Run \`memoc update\`, then update the smallest relevant agent-owned memory files.
 - [ ] Shared repo work? Prefer \`memoc work "<title>" --from-git\` over appending shared files; run \`memoc activity --write\` only when regenerating indexes.
-- [ ] Keep \`session-summary.md\` as a replace-only snapshot under 800B; move completed history to \`log.md\` and resume details to \`04-handoff.md\`. If it grew, run \`memoc trim-summary\`.
+- [ ] Keep \`session-summary.md\` as a replace-only snapshot under 800B; move completed work to actor worklogs and resume risks to \`04-handoff.md\`. If it grew, run \`memoc trim-summary\`.
 ${MGMT_E}`;
 }
 
@@ -784,8 +784,8 @@ function coreLlmsInner() {
 - [Project Brief](.memoc/00-project-brief.md): short identity and direction.
 - [Workflow](.memoc/01-agent-workflow.md): update trigger matrix.
 - [Decisions](.memoc/03-decisions.md): durable decisions.
-- [Log](.memoc/log.md): append-only history.
 - [Systems](.memoc/systems/README.md): subsystem docs.
+- [Activity](.memoc/activity.md): generated worklog index.
 - [Raw Sources](.memoc/raw/README.md): immutable source material; do not read by default.
 - [Wiki](.memoc/wiki/index.md): synthesized knowledge.`;
 }
@@ -1222,7 +1222,6 @@ ${SNAP_E}
 - [Done Checklist](05-done-checklist.md)
 - [Project Rules](06-project-rules.md)
 - [Session Summary](session-summary.md)
-- [Project Log](log.md)
 - [Activity](activity.md)
 - [Actors](actors/README.md)
 - [Worklog](worklog/README.md)
@@ -1265,7 +1264,7 @@ _None yet._
 
 ## Completed Tasks
 
-See \`.memoc/log.md\` for full history.
+See \`.memoc/worklog/\` for full shared activity history.
 
 ## Commands
 
@@ -1277,7 +1276,7 @@ _None yet._
 
 ## Change Log
 
-See \`.memoc/log.md\`.
+See \`.memoc/worklog/\` and generated \`.memoc/activity.md\`.
 `;
 }
 
@@ -1285,7 +1284,7 @@ function tplSessionSummary() {
   return `# Session Summary
 Last: ${nowISO()}
 Replace this file instead of appending to it. Keep total size <800B and each section ≤3 bullets.
-Completed history belongs in \`log.md\`; incomplete/risky resume detail belongs in \`04-handoff.md\`.
+Completed history belongs in actor worklogs; incomplete/risky resume detail belongs in \`04-handoff.md\`.
 Agent-owned — updated by you, not by \`memoc update\`.
 
 ## Status
@@ -1322,7 +1321,6 @@ On-demand reference only. The entry-file managed block is authoritative.
 | \`.memoc/01-agent-workflow.md\` | When update routing is unclear |
 | \`.memoc/05-done-checklist.md\` | Before finishing substantial work |
 | \`.memoc/03-decisions.md\` | When a durable decision was made |
-| \`.memoc/log.md\` | For append-only history |
 | \`.memoc/memoc-usage.md\` | For command details |
 | \`.memoc/systems/*.md\` | Before touching a specific subsystem |
 | \`.memoc/wiki/*.md\` | For synthesized project knowledge |
@@ -1355,16 +1353,16 @@ Shared protocol for any coding agent.
 | Trigger | Update |
 | --- | --- |
 | User asks "update memoc", "refresh project memory", or similar | Run \`memoc update\` first, then update relevant agent-owned memory files |
-| User creates or changes a requirement | \`02-current-project-state.md\`, \`06-project-rules.md\`, \`log.md\` |
-| Code, config, data, or assets changed | \`02-current-project-state.md\`, relevant \`systems/*.md\`, \`log.md\` |
+| User creates or changes a requirement | \`02-current-project-state.md\`, \`06-project-rules.md\`, \`memoc work "<title>" --from-git\` |
+| Code, config, data, or assets changed | \`02-current-project-state.md\`, relevant \`systems/*.md\`, \`memoc work "<title>" --from-git\` |
 | Architecture or system behavior changed | relevant \`systems/*.md\`, \`03-decisions.md\` |
 | A decision should affect future agents | \`03-decisions.md\`, \`02-current-project-state.md\` |
-| Work is substantial enough to resume later | \`04-handoff.md\`, \`02-current-project-state.md\`, \`log.md\` |
+| Work is substantial enough to resume later | \`04-handoff.md\`, \`02-current-project-state.md\`, \`memoc work "<title>" --from-git\` |
 | Durable knowledge was learned | \`wiki/*.md\`, \`wiki/index.md\` |
 | Source material should feed the wiki | \`memoc ingest <path-or-url>\`, then synthesize affected \`wiki/topics/*.md\` |
 | A useful query answer should persist | \`memoc note "<title>"\`, then link related sources/topics |
 | Shared repo work should be traceable | \`memoc work "<title>"\`; avoid appending long details to shared core files |
-| \`session-summary.md\` exceeds 800B or starts accumulating history | Run \`memoc trim-summary\`; move history to \`log.md\`, resume details to \`04-handoff.md\` |
+| \`session-summary.md\` exceeds 800B or starts accumulating history | Run \`memoc trim-summary\`; move completed history to worklog, resume details to \`04-handoff.md\` |
 
 ## Usually No Update Needed
 
@@ -1379,8 +1377,7 @@ Shared protocol for any coding agent.
 - \`02-current-project-state.md\`: current status, tasks, commands, recent notes.
 - \`04-handoff.md\`: resume context, blockers, verified/unverified checks.
 - \`03-decisions.md\`: append durable decisions only.
-- \`log.md\`: full history; keep bulky completed work here.
-- \`worklog/YYYY-MM/*.md\`: actor-scoped append-by-new-file activity records for shared repos.
+- \`worklog/<actor>/YYYY-MM/*.md\`: actor-scoped append-by-new-file activity records for shared repos.
 - \`systems/*.md\` and \`wiki/*.md\`: on-demand durable knowledge.
 `;
 }
@@ -1452,7 +1449,7 @@ Run through this before saying substantial work is complete.
 - [ ] \`.memoc/02-current-project-state.md\` reflects the new status.
 - [ ] \`.memoc/03-decisions.md\` updated if a durable decision was made.
 - [ ] \`.memoc/04-handoff.md\` updated if work is incomplete or risky.
-- [ ] \`.memoc/log.md\` has a new entry for meaningful work.
+- [ ] Meaningful shared work has a \`.memoc/worklog/<actor>/YYYY-MM/*.md\` entry.
 - [ ] Relevant \`.memoc/systems/*.md\` or wiki pages updated.
 
 ## Communication
@@ -1477,7 +1474,7 @@ Durable user and project preferences live here. Update when the user gives a rul
 ## Agent Behavior Preferences
 
 - Be factual and operational in memory docs.
-- Keep logs concise; do not paste temporary command output unless it changes future work.
+- Keep memory notes concise; do not paste temporary command output unless it changes future work.
 - Preserve user changes and avoid reverting unrelated work.
 - State unverified parts honestly in the final answer and handoff.
 
@@ -1490,9 +1487,9 @@ _None yet._
 function tplLog() {
   return `# Project Log
 
-Append-only chronological log for project memory updates.
+Legacy file. New memoc activity belongs in actor worklogs under \`.memoc/worklog/\`.
 
-## [${nowISO()}] init | Initialized memoc memory structure.
+This file is no longer created for new projects. Existing projects may delete it after migrating useful entries to worklogs.
 `;
 }
 
@@ -1515,7 +1512,6 @@ _None yet._
 
 - [Actors](actors/README.md)
 - [Worklog](worklog/README.md)
-- [Project Log](log.md)
 `;
 }
 
@@ -1554,7 +1550,7 @@ Conflict-light per-actor work records.
 ## Layout
 
 \`\`\`text
-worklog/YYYY-MM/YYYY-MM-DDTHHMM-actor-title.md
+worklog/<actor>/YYYY-MM/YYYYMMDDTHHMM-title.md
 \`\`\`
 
 ## Recent Work
@@ -1627,7 +1623,7 @@ Raw files under \`.memoc/raw/\` are intentionally not part of normal memory sear
 
 ## Shared Repo Activity
 
-Use \`memoc work "<title>" --from-git\` to create conflict-light activity records under \`.memoc/worklog/YYYY-MM/\`. The command prefills actor, branch, timestamp, and changed files from git so agents only need to fill short Summary/Verification notes when useful. Actor is detected in this order: \`MEMOC_ACTOR\`, \`.memoc/local/actor\`, \`git config user.name\`, \`git config user.email\`, OS username. Use \`memoc actor set <name>\` to store a local actor name without committing it.
+Use \`memoc work "<title>" --from-git\` to create conflict-light activity records under \`.memoc/worklog/<actor>/YYYY-MM/\`. The command prefills actor, branch, timestamp, and changed files from git so agents only need to fill short Summary/Verification notes when useful. Actor is detected in this order: \`MEMOC_ACTOR\`, \`.memoc/local/actor\`, \`git config user.name\`, \`git config user.email\`, OS username. Use \`memoc actor set <name>\` to store a local actor name without committing it.
 
 \`.memoc/activity.md\`, \`.memoc/worklog/README.md\`, and \`.memoc/actors/README.md\` are regenerated indexes. Run \`memoc activity --write\` to rebuild them from worklog/actor files instead of appending to them during every task.
 
@@ -1646,9 +1642,9 @@ Use \`memoc update\` or \`skills/project-memory-maintainer/SKILL.md\` when:
 
 Usually skip for pure Q&A, throwaway exploration, or tiny edits with no future impact.
 
-When the user asks for a general memoc/project-memory refresh, run \`memoc update\` first. It refreshes managed sections, reconnects default wiki scaffold links, and applies Obsidian frontmatter tags. Then update only the agent-owned files whose content actually changed, such as \`.memoc/session-summary.md\`, \`.memoc/02-current-project-state.md\`, \`.memoc/04-handoff.md\`, \`.memoc/wiki/index.md\`, or \`.memoc/log.md\`.
+When the user asks for a general memoc/project-memory refresh, run \`memoc update\` first. It refreshes managed sections, reconnects default wiki scaffold links, and applies Obsidian frontmatter tags. Then update only the agent-owned files whose content actually changed, such as \`.memoc/session-summary.md\`, \`.memoc/02-current-project-state.md\`, \`.memoc/04-handoff.md\`, \`.memoc/wiki/index.md\`, or actor worklogs.
 
-\`.memoc/session-summary.md\` is a startup snapshot, not a timeline. Rewrite it in place, do not append old work. If it exceeds 800B, run \`memoc trim-summary\`; it archives the previous summary and rewrites a compact version. Put completed history in \`.memoc/log.md\`, and put unfinished/risky resume detail in \`.memoc/04-handoff.md\`.
+\`.memoc/session-summary.md\` is a startup snapshot, not a timeline. Rewrite it in place, do not append old work. If it exceeds 800B, run \`memoc trim-summary\`; it archives the previous summary and rewrites a compact version. Put completed history in actor worklogs, and put unfinished/risky resume detail in \`.memoc/04-handoff.md\`.
 
 ## Updating The Wiki
 
@@ -1662,7 +1658,7 @@ Create a new Markdown file under \`.memoc/wiki/\` when synthesized knowledge sho
 After creating or editing wiki pages:
 1. Update \`.memoc/wiki/index.md\`.
 2. Run \`memoc lint-wiki\`.
-3. Append \`.memoc/log.md\`.
+3. If the change is meaningful shared work, run \`memoc work "<title>" --from-git\`.
 
 Useful scaffolds:
 
@@ -1802,7 +1798,6 @@ _None yet. Use \`memoc note "<title>"\` for durable analysis or query results th
 - [Agent Index](../00-agent-index.md)
 - [Project Brief](../00-project-brief.md)
 - [Current Project State](../02-current-project-state.md)
-- [Project Log](../log.md)
 `;
 }
 
@@ -1986,16 +1981,16 @@ Use this local skill after meaningful project work so future agents can continue
 - Update \`.memoc/04-handoff.md\` before ending substantial work.
 - Check \`.memoc/05-done-checklist.md\` before saying substantial work is complete.
 - Update \`.memoc/06-project-rules.md\` when the user gives durable preferences.
-- Append \`.memoc/log.md\` for meaningful changes, decisions, and handoffs.
+- Create a short actor worklog with \`memoc work "<title>" --from-git\` for meaningful changes, decisions, and handoffs.
 - Create or update \`.memoc/systems/*.md\` when a subsystem needs durable explanation.
 - Create or update \`.memoc/wiki/*.md\` when synthesized knowledge should compound over time.
 - Use \`memoc ingest <path-or-url>\` for source material and \`memoc note "<title>"\` for durable query results or analysis.
 - Use \`memoc work "<title>" --from-git\` for meaningful shared-repo work so details are saved in actor-scoped worklog files instead of causing shared-file conflicts.
 - Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, add relative Markdown links between related pages, and include a \`## Related\` section on every new wiki page.
 - Run \`memoc lint-wiki\` after wiki/source/topic edits and address broken links before finishing.
-- Keep completed history in \`.memoc/log.md\`; keep current-state files short.
-- Move completed session details out of \`session-summary.md\` into \`log.md\`; move incomplete/risky resume details into \`04-handoff.md\`.
-- In shared repos, avoid appends to \`log.md\`; prefer new files under \`.memoc/worklog/YYYY-MM/\` and regenerate \`.memoc/activity.md\` with \`memoc activity --write\`.
+- Keep completed history in actor worklogs; keep current-state files short.
+- Move completed session details out of \`session-summary.md\` into \`.memoc/worklog/<actor>/YYYY-MM/\`; move incomplete/risky resume details into \`04-handoff.md\`.
+- In shared repos, do not use \`log.md\`; prefer new files under \`.memoc/worklog/<actor>/YYYY-MM/\` and regenerate \`.memoc/activity.md\` with \`memoc activity --write\`.
 - Keep tool output small; prefer \`summary\`, file-only search, \`--limit\`, and targeted reads.
 
 ## Wiki Link Rules
@@ -2188,7 +2183,6 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, '04-handoff.md'),             tplHandoff],
       [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
       [path.join(memDir, '06-project-rules.md'),       tplProjectRules],
-      [path.join(memDir, 'log.md'),                    tplLog],
       [path.join(memDir, 'activity.md'),               tplActivity],
       [path.join(memDir, 'actors/README.md'),          tplActorsReadme],
       [path.join(memDir, 'worklog/README.md'),         tplWorklogReadme],
@@ -2297,7 +2291,6 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, '04-handoff.md'),             tplHandoff],
       [path.join(memDir, '05-done-checklist.md'),      tplDoneChecklist],
       [path.join(memDir, '06-project-rules.md'),       tplProjectRules],
-      [path.join(memDir, 'log.md'),                    tplLog],
       [path.join(memDir, 'activity.md'),               tplActivity],
       [path.join(memDir, 'actors/README.md'),          tplActorsReadme],
       [path.join(memDir, 'worklog/README.md'),         tplWorklogReadme],
@@ -2334,7 +2327,7 @@ function run(dir, forceUpdate, action = 'update') {
     ensurePathHelpers(dir, mark);
     ensurePathRegistration(dir, mark);
 
-    mark('skip', '.memoc/log.md (shared history now belongs in worklog)');
+    mark('skip', '.memoc/log.md (legacy; shared history belongs in worklog)');
   }
 
   hideOnWindows(memDir);
@@ -2442,8 +2435,8 @@ function runWork(dir) {
   ensureActorProfile(dir, detected);
   const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, '').replace('T', 'T');
   const month = todayISO().slice(0, 7);
-  const fileName = `${stamp}-${detected.actor}-${slugify(title, 'work')}.md`;
-  const workPath = uniquePath(path.join(dir, '.memoc', 'worklog', month, fileName));
+  const fileName = `${stamp}-${slugify(title, 'work')}.md`;
+  const workPath = uniquePath(path.join(dir, '.memoc', 'worklog', detected.actor, month, fileName));
   write(workPath, worklogRecord(dir, title, detected, opts));
   ensureMemocFrontmatter(workPath, dir);
 
@@ -2470,7 +2463,7 @@ function runActivity(dir) {
 
   console.log('\n  memoc activity\n');
   if (!recent.length) {
-    console.log('    No worklog entries yet. Use `memoc work "<title>`.');
+    console.log('    No worklog entries yet. Use `memoc work "<title>"`.');
     console.log();
     return;
   }
@@ -2542,9 +2535,9 @@ _None._
 
 ## Related
 
-- [Activity](../../activity.md)
-- [Worklog](../README.md)
-- [Actor](../../actors/${detected.actor}.md)
+- [Activity](../../../activity.md)
+- [Worklog](../../README.md)
+- [Actor](../../../actors/${detected.actor}.md)
 `;
 }
 
@@ -2586,6 +2579,12 @@ ${activityItems}
 Generated index of conflict-light per-actor work records.
 
 Last generated: ${nowISO()}
+
+## Layout
+
+\`\`\`text
+worklog/<actor>/YYYY-MM/YYYYMMDDTHHMM-title.md
+\`\`\`
 
 ## Rules
 
@@ -2791,7 +2790,6 @@ function ensureMemocBase(dir) {
     [path.join(memDir, 'raw/README.md'), tplRawReadme],
     [path.join(memDir, 'raw/files/README.md'), tplRawFilesReadme],
     [path.join(memDir, 'raw/urls/README.md'), tplRawUrlsReadme],
-    [path.join(memDir, 'log.md'), tplLog],
     [path.join(memDir, 'activity.md'), tplActivity],
     [path.join(memDir, 'actors/README.md'), tplActorsReadme],
     [path.join(memDir, 'worklog/README.md'), tplWorklogReadme],
@@ -2946,12 +2944,6 @@ function addWikiListItem(filePath, heading, link, title, note) {
     ? `\n${item}\n`
     : `${m[2].trimEnd()}\n${item}\n`;
   write(filePath, src.replace(re, `$1${replacementBody}`));
-}
-
-function appendMemocLog(dir, text) {
-  const fp = path.join(dir, '.memoc', 'log.md');
-  ensure(fp, tplLog());
-  fs.appendFileSync(fp, `\n## [${nowISO()}] ${text}\n`, 'utf8');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3163,7 +3155,7 @@ function searchPriority(file, scope = 'memory') {
     '.memoc/04-handoff.md',
     '.memoc/06-project-rules.md',
     '.memoc/03-decisions.md',
-    '.memoc/log.md',
+    '.memoc/activity.md',
     'AGENTS.md',
     'CLAUDE.md',
     'llms.txt',
@@ -3197,7 +3189,7 @@ function runTokens(dir) {
     ['03-decisions.md',               path.join(memDir, '03-decisions.md')],
     ['04-handoff.md',                 path.join(memDir, '04-handoff.md')],
     ['06-project-rules.md',           path.join(memDir, '06-project-rules.md')],
-    ['log.md',                        path.join(memDir, 'log.md')],
+    ['activity.md',                   path.join(memDir, 'activity.md')],
   ];
 
   console.log('\n  memoc tokens\n');
@@ -3230,7 +3222,7 @@ function runTokens(dir) {
   const summaryContent = read(path.join(memDir, 'session-summary.md'));
   const summaryBytes   = Buffer.byteLength(summaryContent, 'utf8');
   if (summaryBytes > 800) {
-    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Run \`memoc trim-summary\`, then move completed history to log.md and resume details to 04-handoff.md.`);
+    console.log(`\n  ⚠ session-summary.md is ${summaryBytes}B — recommended <800B. Run \`memoc trim-summary\`, then move completed history to worklog and resume details to 04-handoff.md.`);
   }
   console.log();
 }
@@ -3285,7 +3277,7 @@ function runDoctor(dir) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// COMPRESS — archive old log.md entries to keep file small
+// COMPRESS — legacy log.md archiver
 // ═══════════════════════════════════════════════════════════════════
 
 function runCompress(dir) {
@@ -3321,6 +3313,7 @@ function runCompress(dir) {
   write(logPath, header.trimEnd() + '\n' + toKeep.join('') + '\n');
 
   console.log(`\n  memoc compress\n`);
+  console.log('    Legacy command: new activity should use .memoc/worklog/ instead of log.md.');
   console.log(`    Archived  ${toArchive.length} entries → .memoc/log-archive.md`);
   console.log(`    Kept      ${toKeep.length} recent entries in log.md`);
   const saved = Buffer.byteLength(toArchive.join(''), 'utf8');
@@ -3364,7 +3357,7 @@ function runTrimSummary(dir) {
   console.log('\n  memoc trim-summary\n');
   console.log(`    Archived  .memoc/session-summary-archive.md`);
   console.log(`    Rewrote   .memoc/session-summary.md (${beforeBytes}B → ${afterBytes}B)`);
-  console.log('    Reminder  Completed history belongs in log.md; resume details belong in 04-handoff.md.');
+  console.log('    Reminder  Completed history belongs in worklog; resume details belong in 04-handoff.md.');
   console.log('\n  Done.\n');
 }
 
@@ -3374,7 +3367,7 @@ function compactSessionSummary(src) {
     '# Session Summary',
     `Last: ${nowISO()}`,
     'Replace this file instead of appending to it. Keep total size <800B and each section ≤3 bullets.',
-    'Completed history belongs in `log.md`; incomplete/risky resume detail belongs in `04-handoff.md`.',
+    'Completed history belongs in actor worklogs; incomplete/risky resume detail belongs in `04-handoff.md`.',
     '',
   ];
 
@@ -3488,7 +3481,7 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  summary            Print a tiny status/resume overview');
   console.log('  tokens             Estimate token cost of current memory files');
   console.log('  trim-summary       Archive and compact oversized session-summary.md');
-  console.log('  compress           Archive old log.md entries to keep file small');
+  console.log('  compress           Legacy: archive old log.md entries');
   console.log('  add <agent>        Add entry file for a specific agent (run without args to list)');
   console.log('  actor [set <name>] Show or set the local memoc actor');
   console.log('  work "<title>"     Create a conflict-light actor worklog entry');
