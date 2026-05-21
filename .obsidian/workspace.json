@@ -4,19 +4,17 @@
     "type": "split",
     "children": [
       {
-        "id": "90c23938e762469a",
+        "id": "84a9bde760781a5c",
         "type": "tabs",
         "children": [
           {
-            "id": "945941d38436158b",
+            "id": "1d2b73e2963bd1d6",
             "type": "leaf",
             "state": {
-              "type": "vscode-editor",
-              "state": {
-                "file": "package.json"
-              },
+              "type": "empty",
+              "state": {},
               "icon": "lucide-file",
-              "title": "package"
+              "title": "새 탭"
             }
           }
         ]
@@ -180,8 +178,9 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "945941d38436158b",
+  "active": "1d2b73e2963bd1d6",
   "lastOpenFiles": [
+    "package.json",
     "README.md",
     "workspace.json"
   ]
