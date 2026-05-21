@@ -192,10 +192,14 @@ Every entry file (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, etc.) gets the same 
 ## Session Start
 - [ ] Read `.memoc/session-summary.md`
 - [ ] `.pending` exists? → review changed files → update memory if needed → delete it
+- [ ] If `memoc` is not found, use the project-local wrapper.
 
 ## Before Opening More Files
 - [ ] Run `memoc search "<query>"` first
 - [ ] Open on demand: `02` status · `04` resume · `06` rules · `llms.txt` map
+- [ ] Use `memoc grep "<query>"` only when memory is not enough.
+- [ ] For durable source/wiki work, use `memoc ingest`, `memoc note`, and `memoc lint-wiki`.
+- [ ] In shared repos, record meaningful work with `memoc work "<title>"`.
 - [ ] Keep output small: `summary`, `search --limit`, `search --snippets`
 
 ## Before Finishing _(update only applicable files; skip Q&A / throwaway exploration)_
@@ -204,6 +208,8 @@ Every entry file (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, etc.) gets the same 
 - [ ] Work incomplete or risky → `04-handoff.md` (verified commands, unverified items, next steps)
 - [ ] Rule/preference set → `06-project-rules.md`
 - [ ] Wiki/systems work → read `skills/project-memory-maintainer/SKILL.md`
+- [ ] Shared repo work → prefer `memoc work "<title>" --from-git`; run `memoc activity --write` only when regenerating indexes.
+- [ ] Keep `session-summary.md` replace-only; completed work belongs in actor worklogs.
 ```
 
 The checklist tells agents exactly when to update, which file to update, and what to record — so nothing gets missed.
