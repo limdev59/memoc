@@ -981,7 +981,9 @@ function collectMemocMarkdownFiles(dir) {
   }
   walk(path.join(dir, '.memoc'));
   walk(path.join(dir, 'skills', 'project-memory-maintainer'));
-  return files.sort();
+  return files
+    .filter(fp => !/session-summary-archive(?:-\d+)?\.md$/.test(path.basename(fp)))
+    .sort();
 }
 
 function ensureMemocFrontmatter(filePath, dir) {
@@ -3470,8 +3472,8 @@ function compactSessionSummary(src) {
   const lines = [
     '# Session Summary',
     `Last: ${nowISO()}`,
-    'Replace this file instead of appending to it. Keep total size <800B and each section ≤3 bullets.',
-    'Completed history belongs in actor worklogs; incomplete/risky resume detail belongs in `04-handoff.md`.',
+    'Replace, do not append. Keep <800B.',
+    'History: worklog. Resume risks: 04-handoff.md.',
     '',
   ];
 
@@ -3493,6 +3495,7 @@ function sectionText(src, heading) {
 }
 
 function compactSummaryBullets(text) {
+  const maxLine = 72;
   return String(text || '')
     .split(/\r?\n/)
     .map(line => line.trim())
@@ -3500,7 +3503,13 @@ function compactSummaryBullets(text) {
     .map(line => line.replace(/^[-*]\s+/, '').replace(/^\d+[.)]\s+/, '').trim())
     .filter(Boolean)
     .slice(0, 3)
-    .map(line => `- ${line.length > 140 ? `${line.slice(0, 137)}...` : line}`);
+    .map(line => {
+      const compact = line
+        .replace(/`/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return `- ${compact.length > maxLine ? `${compact.slice(0, maxLine - 3)}...` : compact}`;
+    });
 }
 
 function summaryPlaceholder(heading) {

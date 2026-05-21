@@ -560,7 +560,7 @@ test('trim-summary archives oversized startup summary and rewrites compact snaps
     const archive = fs.readFileSync(path.join(dir, '.memoc', 'session-summary-archive.md'), 'utf8');
 
     assert.match(output, /memoc trim-summary/);
-    assert.ok(Buffer.byteLength(compact, 'utf8') < 1200);
+    assert.ok(Buffer.byteLength(compact, 'utf8') < 800);
     assert.equal((compact.match(/status detail/g) || []).length, 3);
     assert.equal((compact.match(/changed detail/g) || []).length, 3);
     assert.match(archive, /status detail 11/);
@@ -591,6 +591,27 @@ test('upgrade automatically trims oversized session summary', () => {
     assert.equal((compact.match(/update detail/g) || []).length, 3);
     assert.match(archive, /update detail 11/);
     assert.match(compact, /memoc\/state/);
+  });
+});
+
+test('doctor ignores summary archive frontmatter fences', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'session-summary-archive.md'),
+      '# Session Summary Archive\n\n---\nmemoc: true\n---\n# Old Summary\n',
+      'utf8'
+    );
+
+    const output = execFileSync(process.execPath, [cliPath, 'doctor'], { cwd: dir, encoding: 'utf8', env });
+
+    assert.doesNotMatch(output, /session-summary-archive\.md may have nested frontmatter/);
   });
 });
 
