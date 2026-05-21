@@ -141,7 +141,7 @@ Run it from the project root. It preserves existing project memory, including:
 - `.memoc/04-handoff.md`
 - `.memoc/06-project-rules.md`
 - Legacy `.memoc/log.md` if present
-- `.memoc/systems/`
+- Legacy `.memoc/systems/` if present (moved to `.memoc/raw/legacy-systems/` on upgrade)
 - `.memoc/wiki/`
 
 It refreshes the managed blocks, project-local wrappers, runtime copy, PATH helpers, and memoc-owned protocol templates. User-owned memory files such as `session-summary.md`, `03-decisions.md`, `04-handoff.md`, `06-project-rules.md`, and wiki topic/source pages are preserved. Upgrade also runs the `trim-summary` compaction pass so startup memory stays small. If `memoc` is not on PATH after upgrading, keep using:
@@ -176,10 +176,10 @@ llms.txt                                     ← LLM-facing project map
   actors/                                    ← Actor profiles for shared repos
   worklog/                                   ← Per-actor work records to reduce conflicts
   raw/                                       ← Immutable source material, not a startup read
-  systems/                                   ← Subsystem docs
-  wiki/                                      ← Synthesized knowledge base
+  wiki/project/                              ← Project implementation wiki
+  wiki/knowledge/                            ← Source-backed knowledge wiki
 
-skills/project-memory-maintainer/SKILL.md   ← Wiki & systems operations guide
+skills/project-memory-maintainer/SKILL.md   ← Wiki operations guide
 ```
 
 ---
@@ -207,7 +207,7 @@ Every entry file (`CLAUDE.md`, `AGENTS.md`, `.cursorrules`, etc.) gets the same 
 - [ ] Decision made → `03-decisions.md` (what & why) + `02`
 - [ ] Work incomplete or risky → `04-handoff.md` (verified commands, unverified items, next steps)
 - [ ] Rule/preference set → `06-project-rules.md`
-- [ ] Wiki/systems work → read `skills/project-memory-maintainer/SKILL.md`
+- [ ] Wiki/project-memory work → read `skills/project-memory-maintainer/SKILL.md`
 - [ ] Shared repo work → prefer `memoc work "<title>" --from-git`; run `memoc activity --write` only when regenerating indexes.
 - [ ] Keep `session-summary.md` replace-only; completed work belongs in actor worklogs.
 ```

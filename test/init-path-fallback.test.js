@@ -251,6 +251,8 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     fs.writeFileSync(path.join(dir, '.memoc', '05-done-checklist.md'), '# Done Checklist\n\n- [ ] `.memoc/log.md` has a new entry for meaningful work.\n', 'utf8');
     fs.writeFileSync(path.join(dir, '.memoc', 'memoc-usage.md'), '# memoc Usage\n\n1. Work.\n2. Append `.memoc/log.md`.\n', 'utf8');
     fs.writeFileSync(path.join(dir, 'skills/project-memory-maintainer/SKILL.md'), '# Project Memory Maintainer\n\n- Append `.memoc/log.md` for meaningful changes, decisions, and handoffs.\n- Keep completed history in `.memoc/log.md`; keep current-state files short.\n', 'utf8');
+    fs.mkdirSync(path.join(dir, '.memoc', 'systems'), { recursive: true });
+    fs.writeFileSync(path.join(dir, '.memoc', 'systems', 'gateway.md'), '# Gateway\n\nLegacy system doc.\n', 'utf8');
     fs.writeFileSync(path.join(runtimeDir, 'package.json'), JSON.stringify({ version: '0.0.1' }), 'utf8');
 
     const output = execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
@@ -260,7 +262,9 @@ test('upgrade refreshes runtime while preserving existing memory', () => {
     assert.match(fs.readFileSync(decisionsPath, 'utf8'), /Preserve user decisions/);
     assert.equal(JSON.parse(fs.readFileSync(path.join(runtimeDir, 'package.json'), 'utf8')).version, pkg.version);
     assert.equal(fs.existsSync(path.join(dir, '.memoc', 'log.md')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'systems')), false);
     assert.match(fs.readFileSync(path.join(dir, '.memoc', 'raw', 'legacy-log.md'), 'utf8'), /Preserve this legacy history/);
+    assert.match(fs.readFileSync(path.join(dir, '.memoc', 'raw', 'legacy-systems', 'gateway.md'), 'utf8'), /Legacy system doc/);
     assert.match(fs.readFileSync(path.join(dir, '.memoc', '05-done-checklist.md'), 'utf8'), /worklog\/<actor>\/YYYY-MM/);
     assert.doesNotMatch(fs.readFileSync(path.join(dir, '.memoc', 'memoc-usage.md'), 'utf8'), /Append `\.memoc\/log\.md`/);
     assert.doesNotMatch(fs.readFileSync(path.join(dir, 'skills/project-memory-maintainer/SKILL.md'), 'utf8'), /Append `\.memoc\/log\.md`|completed history in `\.memoc\/log\.md`/);
@@ -358,8 +362,10 @@ test('init creates an Obsidian-friendly connected wiki scaffold', () => {
     });
 
     const wikiIndex = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
-    const topics = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'topics', 'README.md'), 'utf8');
-    const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'utf8');
+    const projectWiki = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'project', 'README.md'), 'utf8');
+    const knowledgeWiki = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'README.md'), 'utf8');
+    const topics = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'topics', 'README.md'), 'utf8');
+    const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources.md'), 'utf8');
     const agentIndex = fs.readFileSync(path.join(dir, '.memoc', '00-agent-index.md'), 'utf8');
     const skill = fs.readFileSync(path.join(dir, 'skills', 'project-memory-maintainer', 'SKILL.md'), 'utf8');
     const agents = fs.readFileSync(path.join(dir, 'AGENTS.md'), 'utf8');
@@ -367,15 +373,17 @@ test('init creates an Obsidian-friendly connected wiki scaffold', () => {
 
     assert.match(wikiIndex, /^---\nmemoc: true\n/m);
     assert.match(wikiIndex, /  - memoc\/wiki/);
+    assert.match(projectWiki, /  - memoc\/project-wiki/);
+    assert.match(knowledgeWiki, /  - memoc\/knowledge-wiki/);
     assert.match(topics, /  - memoc\/topic/);
     assert.match(agentIndex, /  - memoc\/core/);
-    assert.match(wikiIndex, /\[Sources\]\(sources\.md\)/);
-    assert.match(wikiIndex, /\[Topics\]\(topics\/README\.md\)/);
+    assert.match(wikiIndex, /\[Project Wiki\]\(project\/README\.md\)/);
+    assert.match(wikiIndex, /\[Knowledge Wiki\]\(knowledge\/README\.md\)/);
     assert.match(wikiIndex, /\[Agent Index\]\(\.\.\/00-agent-index\.md\)/);
-    assert.match(topics, /\[Wiki Index\]\(\.\.\/index\.md\)/);
+    assert.match(topics, /\[Knowledge Wiki\]\(\.\.\/README\.md\)/);
     assert.match(topics, /Avoid orphan pages/);
     assert.match(sources, /\[Open Questions\]\(questions\.md\)/);
-    assert.match(agentIndex, /\[Wiki Lint\]\(wiki\/lint\.md\)/);
+    assert.match(agentIndex, /\[Wiki Lint\]\(wiki\/knowledge\/lint\.md\)/);
     assert.match(skill, /Keep the wiki graph connected/);
     assert.match(skill, /relative Markdown links/);
     assert.match(agents, /run `memoc update` first/);
@@ -424,14 +432,14 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
     execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
 
     const wikiIndex = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'index.md'), 'utf8');
-    const glossary = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'glossary.md'), 'utf8');
+    const glossary = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'glossary.md'), 'utf8');
 
-    assert.match(wikiIndex, /## Graph Hubs/);
-    assert.match(wikiIndex, /\[Wiki Lint\]\(lint\.md\)/);
+    assert.match(wikiIndex, /## Wiki Layers/);
+    assert.match(wikiIndex, /\[Knowledge Wiki\]\(knowledge\/README\.md\)/);
     assert.match(glossary, /^---\nmemoc: true\n/m);
     assert.match(glossary, /  - memoc\/glossary/);
     assert.match(glossary, /User-owned term should stay/);
-    assert.doesNotMatch(glossary, /\[Wiki Index\]\(index\.md\)/);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'glossary.md')), false);
   });
 });
 
@@ -454,16 +462,16 @@ test('wiki operations scaffold raw sources, source records, notes, and lint repo
       env,
     });
     assert.match(ingestOutput, /memoc ingest/);
-    assert.match(ingestOutput, /\.memoc\/wiki\/sources\/\d{4}-\d{2}-\d{2}-renderer-design\.md/);
+    assert.match(ingestOutput, /\.memoc\/wiki\/knowledge\/sources\/\d{4}-\d{2}-\d{2}-renderer-design\.md/);
 
-    const sourceFiles = fs.readdirSync(path.join(dir, '.memoc', 'wiki', 'sources'))
+    const sourceFiles = fs.readdirSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources'))
       .filter(f => f.endsWith('renderer-design.md'));
     assert.equal(sourceFiles.length, 1);
-    const sourceRecord = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'sources', sourceFiles[0]), 'utf8');
+    const sourceRecord = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources', sourceFiles[0]), 'utf8');
     assert.match(sourceRecord, /type: wiki/);
     assert.match(sourceRecord, /status: needs-synthesis/);
     assert.match(sourceRecord, /  - memoc\/source/);
-    assert.match(sourceRecord, /\[raw file\]\(\.\.\/\.\.\/raw\/files\//);
+    assert.match(sourceRecord, /\[raw file\]\(\.\.\/\.\.\/\.\.\/raw\/files\//);
 
     const rawFiles = fs.readdirSync(path.join(dir, '.memoc', 'raw', 'files'))
       .filter(f => f.endsWith('renderer-design.md'));
@@ -475,7 +483,7 @@ test('wiki operations scaffold raw sources, source records, notes, and lint repo
       env,
     });
     assert.match(noteOutput, /memoc note/);
-    const topic = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'topics', 'renderer-pipeline-findings.md'), 'utf8');
+    const topic = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'topics', 'renderer-pipeline-findings.md'), 'utf8');
     assert.match(topic, /  - memoc\/topic/);
     assert.match(topic, /Pipeline knowledge should persist/);
 
@@ -485,7 +493,7 @@ test('wiki operations scaffold raw sources, source records, notes, and lint repo
       env,
     });
     assert.match(lintOutput, /memoc lint-wiki/);
-    const lint = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'lint.md'), 'utf8');
+    const lint = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'lint.md'), 'utf8');
     assert.match(lint, /## Graph Checks/);
     assert.match(lint, /Last checked:/);
 

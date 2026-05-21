@@ -246,6 +246,63 @@ function archiveLegacyLog(dir, mark) {
   mark('move', `${path.relative(dir, logPath)} -> ${path.relative(dir, archivePath)}`);
 }
 
+function movePathUnique(srcPath, destPath) {
+  const target = uniquePath(destPath);
+  fs.mkdirSync(path.dirname(target), { recursive: true });
+  fs.renameSync(srcPath, target);
+  return target;
+}
+
+function archiveLegacySystems(dir, mark) {
+  const systemsPath = path.join(dir, '.memoc', 'systems');
+  if (!fs.existsSync(systemsPath)) {
+    mark('skip', '.memoc/systems (legacy; no dir)');
+    return;
+  }
+  const archivePath = movePathUnique(systemsPath, path.join(dir, '.memoc', 'raw', 'legacy-systems'));
+  mark('move', `${path.relative(dir, systemsPath)} -> ${path.relative(dir, archivePath)}`);
+}
+
+function migrateKnowledgeWiki(dir, mark) {
+  const wikiDir = path.join(dir, '.memoc', 'wiki');
+  const knowledgeDir = path.join(wikiDir, 'knowledge');
+  const moves = [
+    ['sources.md', 'sources.md'],
+    ['glossary.md', 'glossary.md'],
+    ['questions.md', 'questions.md'],
+    ['lint.md', 'lint.md'],
+    ['sources', 'sources'],
+    ['topics', 'topics'],
+    ['global', 'global'],
+  ];
+  for (const [from, to] of moves) {
+    const src = path.join(wikiDir, from);
+    const dest = path.join(knowledgeDir, to);
+    if (!fs.existsSync(src)) continue;
+    if (fs.existsSync(dest)) {
+      try {
+        const st = fs.statSync(dest);
+        if (st.isFile() && isDefaultKnowledgeScaffold(dest)) fs.unlinkSync(dest);
+        else continue;
+      } catch {
+        continue;
+      }
+    }
+    const moved = movePathUnique(src, dest);
+    mark('move', `${path.relative(dir, src)} -> ${path.relative(dir, moved)}`);
+  }
+}
+
+function isDefaultKnowledgeScaffold(filePath) {
+  const src = safeRead(filePath);
+  const name = path.basename(filePath);
+  if (name === 'sources.md') return src.includes('# Sources') && src.includes('_No sources recorded yet._');
+  if (name === 'glossary.md') return src.includes('# Glossary') && src.includes('_No terms defined yet.');
+  if (name === 'questions.md') return src.includes('# Open Questions') && src.includes('_No open questions yet._');
+  if (name === 'lint.md') return src.includes('# Wiki Lint') && src.includes('_No issues found._');
+  return false;
+}
+
 function summarySectionBulletCounts(src) {
   const counts = {};
   let current = '';
@@ -797,7 +854,7 @@ function legacyManagedBlock() {
 - [ ] Decision made → \`03-decisions.md\` (what & why) + \`02\`
 - [ ] Work incomplete or risky → \`04-handoff.md\` (verified commands, unverified items, next steps)
 - [ ] Rule/preference set → \`06-project-rules.md\`
-- [ ] Wiki/systems work → read \`skills/project-memory-maintainer/SKILL.md\`
+- [ ] Wiki/project-memory work → read \`skills/project-memory-maintainer/SKILL.md\`
 ${MGMT_E}`;
 }
 
@@ -822,7 +879,7 @@ function managedBlock() {
 - [ ] Decision made? Update \`03-decisions.md\` + \`02\`
 - [ ] Work incomplete or risky? Update \`04-handoff.md\`
 - [ ] Rule/preference set? Update \`06-project-rules.md\`
-- [ ] Wiki/systems work? Read \`skills/project-memory-maintainer/SKILL.md\`
+- [ ] Wiki/project-memory work? Read \`skills/project-memory-maintainer/SKILL.md\`
 - [ ] User asked to update memoc/project memory? Run \`memoc update\`, then update the smallest relevant agent-owned memory files.
 - [ ] Shared repo work? Prefer \`memoc work "<title>" --from-git\` over appending shared files; run \`memoc activity --write\` only when regenerating indexes.
 - [ ] Keep \`session-summary.md\` as a replace-only snapshot under 800B; move completed work to actor worklogs and resume risks to \`04-handoff.md\`. If it grew, run \`memoc trim-summary\`.
@@ -860,43 +917,44 @@ function coreLlmsInner() {
 - [Project Brief](.memoc/00-project-brief.md): short identity and direction.
 - [Workflow](.memoc/01-agent-workflow.md): update trigger matrix.
 - [Decisions](.memoc/03-decisions.md): durable decisions.
-- [Systems](.memoc/systems/README.md): subsystem docs.
+- [Project Wiki](.memoc/wiki/project/README.md): repo implementation docs.
+- [Knowledge Wiki](.memoc/wiki/knowledge/README.md): external sources, concepts, glossary.
 - [Activity](.memoc/activity.md): generated worklog index.
 - [Raw Sources](.memoc/raw/README.md): immutable source material; do not read by default.
-- [Wiki](.memoc/wiki/index.md): synthesized knowledge.`;
+- [Wiki](.memoc/wiki/index.md): project/knowledge wiki hub.`;
 }
 
 function headerInner(p) {
   return `# ${p.name}\n\n> LLM-facing project map for this project.`;
 }
 
-function systemsLlmsInner(dir) {
-  const systemsDir = path.join(dir, '.memoc', 'systems');
-  if (!fs.existsSync(systemsDir)) return '_None yet._';
-  const files = fs.readdirSync(systemsDir)
+function projectWikiLlmsInner(dir) {
+  const projectDir = path.join(dir, '.memoc', 'wiki', 'project');
+  if (!fs.existsSync(projectDir)) return '_None yet._';
+  const files = fs.readdirSync(projectDir)
     .filter(f => f.endsWith('.md') && f !== 'README.md')
     .sort();
   if (!files.length) return '_None yet._';
-  return files.map(f => `- [${f.replace('.md', '')}](.memoc/systems/${f}): subsystem context.`).join('\n');
+  return files.map(f => `- [${f.replace('.md', '')}](.memoc/wiki/project/${f}): project implementation context.`).join('\n');
 }
 
 function wikiLlmsInner(dir) {
   const wikiDir = path.join(dir, '.memoc', 'wiki');
   if (!fs.existsSync(wikiDir)) return '_None yet._';
   const lines = [];
-  const SKIP = new Set(['index.md']);
   try {
-    for (const f of fs.readdirSync(wikiDir).sort()) {
-      if (!f.endsWith('.md') || SKIP.has(f)) continue;
-      try { if (fs.statSync(path.join(wikiDir, f)).isDirectory()) continue; } catch { continue; }
-      lines.push(`- [${f.replace('.md', '')}](.memoc/wiki/${f}): wiki page.`);
+    const knowledgeDir = path.join(wikiDir, 'knowledge');
+    for (const f of ['README.md', 'sources.md', 'glossary.md', 'questions.md', 'lint.md']) {
+      if (fs.existsSync(path.join(knowledgeDir, f))) {
+        lines.push(`- [knowledge/${f.replace('.md', '')}](.memoc/wiki/knowledge/${f}): knowledge wiki page.`);
+      }
     }
     for (const sub of ['sources', 'topics', 'global']) {
-      const subDir = path.join(wikiDir, sub);
+      const subDir = path.join(knowledgeDir, sub);
       if (!fs.existsSync(subDir)) continue;
       for (const f of fs.readdirSync(subDir).sort()) {
         if (!f.endsWith('.md')) continue;
-        lines.push(`- [${f.replace('.md', '')}](.memoc/wiki/${sub}/${f}): wiki page.`);
+        lines.push(`- [knowledge/${sub}/${f.replace('.md', '')}](.memoc/wiki/knowledge/${sub}/${f}): knowledge wiki page.`);
       }
     }
   } catch {}
@@ -908,41 +966,50 @@ function wikiScaffoldFiles(memDir) {
     [
       path.join(memDir, 'wiki/index.md'),
       tplWikiIndex,
-      src => src.includes('# Wiki Index') && src.includes('Persistent LLM-maintained project wiki') &&
-        (src.includes('_None yet._') || !src.includes('## Graph Hubs')),
+      src => src.includes('# Wiki Index') && !src.includes('wiki/project'),
     ],
     [
-      path.join(memDir, 'wiki/sources.md'),
+      path.join(memDir, 'wiki/project/README.md'),
+      tplWikiProjectReadme,
+      src => hasOnlyScaffold(src, ['# Project Wiki', 'Implementation docs']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/knowledge/README.md'),
+      tplWikiKnowledgeReadme,
+      src => hasOnlyScaffold(src, ['# Knowledge Wiki', 'Source-backed concepts']) && !src.includes('## Related'),
+    ],
+    [
+      path.join(memDir, 'wiki/knowledge/sources.md'),
       tplWikiSources,
       src => hasOnlyScaffold(src, ['# Sources', '_No sources recorded yet._']) && !src.includes('## Related'),
     ],
     [
-      path.join(memDir, 'wiki/glossary.md'),
+      path.join(memDir, 'wiki/knowledge/glossary.md'),
       tplWikiGlossary,
       src => hasOnlyScaffold(src, ['# Glossary', '_No terms defined yet._']) && !src.includes('## Related'),
     ],
     [
-      path.join(memDir, 'wiki/questions.md'),
+      path.join(memDir, 'wiki/knowledge/questions.md'),
       tplWikiQuestions,
       src => hasOnlyScaffold(src, ['# Open Questions', '_No open questions yet._']) && !src.includes('## Related'),
     ],
     [
-      path.join(memDir, 'wiki/lint.md'),
+      path.join(memDir, 'wiki/knowledge/lint.md'),
       tplWikiLint,
       src => src.includes('# Wiki Lint') && src.includes('_No issues found._') && !src.includes('## Graph Checks'),
     ],
     [
-      path.join(memDir, 'wiki/sources/README.md'),
+      path.join(memDir, 'wiki/knowledge/sources/README.md'),
       tplWikiSourcesReadme,
       src => hasOnlyScaffold(src, ['# Sources', 'Provenance records']) && !src.includes('## Related'),
     ],
     [
-      path.join(memDir, 'wiki/topics/README.md'),
+      path.join(memDir, 'wiki/knowledge/topics/README.md'),
       tplWikiTopicsReadme,
       src => hasOnlyScaffold(src, ['# Topics', 'Synthesized topic pages']) && !src.includes('## Related'),
     ],
     [
-      path.join(memDir, 'wiki/global/README.md'),
+      path.join(memDir, 'wiki/knowledge/global/README.md'),
       tplWikiGlobalReadme,
       src => hasOnlyScaffold(src, ['# Global', 'Project-wide principles']) && !src.includes('## Related'),
     ],
@@ -1011,7 +1078,31 @@ function obsidianFrontmatterSpec(relPath) {
     type = 'wiki';
     extra.confidence = 'medium';
     tags.push('memoc/wiki');
-    if (rel.startsWith('.memoc/wiki/sources/')) {
+    if (rel.startsWith('.memoc/wiki/project/')) {
+      tags.push('memoc/project-wiki');
+      if (rel.endsWith('/README.md')) tags.push('memoc/project-index');
+      else tags.push('memoc/project-doc');
+    } else if (rel.startsWith('.memoc/wiki/knowledge/')) {
+      tags.push('memoc/knowledge-wiki');
+      if (rel.startsWith('.memoc/wiki/knowledge/sources/')) {
+        tags.push('memoc/source');
+        extra.status = 'needs-synthesis';
+      } else if (rel.startsWith('.memoc/wiki/knowledge/topics/')) {
+        tags.push('memoc/topic');
+      } else if (rel.startsWith('.memoc/wiki/knowledge/global/')) {
+        tags.push('memoc/global');
+      } else if (rel.endsWith('/sources.md')) {
+        tags.push('memoc/source');
+      } else if (rel.endsWith('/glossary.md')) {
+        tags.push('memoc/glossary');
+      } else if (rel.endsWith('/questions.md')) {
+        tags.push('memoc/question');
+        extra.status = 'needs-review';
+      } else if (rel.endsWith('/lint.md')) {
+        tags.push('memoc/lint');
+        extra.status = 'generated';
+      }
+    } else if (rel.startsWith('.memoc/wiki/sources/')) {
       tags.push('memoc/source');
       extra.status = 'needs-synthesis';
     } else if (rel.startsWith('.memoc/wiki/topics/')) {
@@ -1215,13 +1306,13 @@ ${CORE_S}
 ${coreLlmsInner()}
 ${CORE_E}
 
-## Systems
+## Project Wiki
 
 ${SYS_S}
 _None yet._
 ${SYS_E}
 
-## Wiki
+## Knowledge Wiki
 
 ${WIKI_S}
 _None yet._
@@ -1257,7 +1348,7 @@ _Not set yet._
 ## How To Approach
 
 - Start from \`session-summary.md\`; search before opening more files.
-- Open status, handoff, rules, map, systems, or wiki docs only when the task needs them.
+- Open status, handoff, rules, map, project wiki, or knowledge wiki only when the task needs them.
 - After durable work, update the smallest relevant memory set.
 - Do not treat generated output folders as source unless the user explicitly asks.
 
@@ -1304,20 +1395,19 @@ ${SNAP_E}
 - [Actors](actors/README.md)
 - [Worklog](worklog/README.md)
 - [Wiki Index](wiki/index.md)
+- [Project Wiki](wiki/project/README.md)
+- [Knowledge Wiki](wiki/knowledge/README.md)
 - [Raw Sources](raw/README.md)
-- [Systems Index](systems/README.md)
-
-## System Docs
-
-_None yet. Add entries when subsystems are documented._
 
 ## Wiki
 
-- [Wiki Index](wiki/index.md) — hub for every synthesized wiki page.
-- [Sources](wiki/sources.md) — source provenance and ingest notes.
-- [Glossary](wiki/glossary.md) — project terms and aliases.
-- [Open Questions](wiki/questions.md) — unresolved knowledge gaps.
-- [Wiki Lint](wiki/lint.md) — orphan, stale, and contradiction checks.
+- [Wiki Index](wiki/index.md) — hub for project and knowledge wikis.
+- [Project Wiki](wiki/project/README.md) — implementation docs for this repo.
+- [Knowledge Wiki](wiki/knowledge/README.md) — source-backed concepts and external knowledge.
+- [Sources](wiki/knowledge/sources.md) — source provenance and ingest notes.
+- [Glossary](wiki/knowledge/glossary.md) — terms and aliases.
+- [Open Questions](wiki/knowledge/questions.md) — unresolved knowledge gaps.
+- [Wiki Lint](wiki/knowledge/lint.md) — orphan, stale, and contradiction checks.
 `;
 }
 
@@ -1400,8 +1490,8 @@ On-demand reference only. The entry-file managed block is authoritative.
 | \`.memoc/05-done-checklist.md\` | Before finishing substantial work |
 | \`.memoc/03-decisions.md\` | When a durable decision was made |
 | \`.memoc/memoc-usage.md\` | For command details |
-| \`.memoc/systems/*.md\` | Before touching a specific subsystem |
-| \`.memoc/wiki/*.md\` | For synthesized project knowledge |
+| \`.memoc/wiki/project/*.md\` | Before touching a specific subsystem |
+| \`.memoc/wiki/knowledge/*.md\` | For source-backed concepts and external knowledge |
 | \`llms.txt\` | For full project file map |
 
 ## Search First
@@ -1432,12 +1522,12 @@ Shared protocol for any coding agent.
 | --- | --- |
 | User asks "update memoc", "refresh project memory", or similar | Run \`memoc update\` first, then update relevant agent-owned memory files |
 | User creates or changes a requirement | \`02-current-project-state.md\`, \`06-project-rules.md\`, \`memoc work "<title>" --from-git\` |
-| Code, config, data, or assets changed | \`02-current-project-state.md\`, relevant \`systems/*.md\`, \`memoc work "<title>" --from-git\` |
-| Architecture or system behavior changed | relevant \`systems/*.md\`, \`03-decisions.md\` |
+| Code, config, data, or assets changed | \`02-current-project-state.md\`, relevant \`wiki/project/*.md\`, \`memoc work "<title>" --from-git\` |
+| Architecture or system behavior changed | relevant \`wiki/project/*.md\`, \`03-decisions.md\` |
 | A decision should affect future agents | \`03-decisions.md\`, \`02-current-project-state.md\` |
 | Work is substantial enough to resume later | \`04-handoff.md\`, \`02-current-project-state.md\`, \`memoc work "<title>" --from-git\` |
-| Durable knowledge was learned | \`wiki/*.md\`, \`wiki/index.md\` |
-| Source material should feed the wiki | \`memoc ingest <path-or-url>\`, then synthesize affected \`wiki/topics/*.md\` |
+| Durable project implementation knowledge was learned | \`wiki/project/*.md\`, \`wiki/index.md\` |
+| Source material should feed the wiki | \`memoc ingest <path-or-url>\`, then synthesize affected \`wiki/knowledge/topics/*.md\` |
 | A useful query answer should persist | \`memoc note "<title>"\`, then link related sources/topics |
 | Shared repo work should be traceable | \`memoc work "<title>"\`; avoid appending long details to shared core files |
 | \`session-summary.md\` exceeds 800B or starts accumulating history | Run \`memoc trim-summary\`; move completed history to worklog, resume details to \`04-handoff.md\` |
@@ -1456,7 +1546,8 @@ Shared protocol for any coding agent.
 - \`04-handoff.md\`: resume context, blockers, verified/unverified checks.
 - \`03-decisions.md\`: append durable decisions only.
 - \`worklog/<actor>/YYYY-MM/*.md\`: actor-scoped append-by-new-file activity records for shared repos.
-- \`systems/*.md\` and \`wiki/*.md\`: on-demand durable knowledge.
+- \`wiki/project/*.md\`: repo implementation docs.
+- \`wiki/knowledge/*.md\`: source-backed concepts, provenance, glossary, questions.
 `;
 }
 
@@ -1528,7 +1619,7 @@ Run through this before saying substantial work is complete.
 - [ ] \`.memoc/03-decisions.md\` updated if a durable decision was made.
 - [ ] \`.memoc/04-handoff.md\` updated if work is incomplete or risky.
 - [ ] Meaningful shared work has a \`.memoc/worklog/<actor>/YYYY-MM/*.md\` entry.
-- [ ] Relevant \`.memoc/systems/*.md\` or wiki pages updated.
+- [ ] Relevant \`.memoc/wiki/project/*.md\` or \`.memoc/wiki/knowledge/*.md\` pages updated.
 
 ## Communication
 
@@ -1715,23 +1806,25 @@ Use \`memoc update\` or \`skills/project-memory-maintainer/SKILL.md\` when:
 - Architecture, data flow, routing, auth, or deployment behavior changed.
 - A decision was made that future agents should not revisit blindly.
 - Work is partial, multi-step, blocked, or likely to be resumed by another agent.
-- New durable knowledge belongs in \`.memoc/wiki/\` or a subsystem doc.
+- New implementation knowledge belongs in \`.memoc/wiki/project/\`.
+- Source-backed concept knowledge belongs in \`.memoc/wiki/knowledge/\`.
 - Shared work should be traceable without causing conflicts.
 
 Usually skip for pure Q&A, throwaway exploration, or tiny edits with no future impact.
 
-When the user asks for a general memoc/project-memory refresh, run \`memoc update\` first. It refreshes managed sections, reconnects default wiki scaffold links, and applies Obsidian frontmatter tags. Then update only the agent-owned files whose content actually changed, such as \`.memoc/session-summary.md\`, \`.memoc/02-current-project-state.md\`, \`.memoc/04-handoff.md\`, \`.memoc/wiki/index.md\`, or actor worklogs.
+When the user asks for a general memoc/project-memory refresh, run \`memoc update\` first. It refreshes managed sections, reconnects default wiki scaffold links, and applies Obsidian frontmatter tags. Then update only the agent-owned files whose content actually changed, such as \`.memoc/session-summary.md\`, \`.memoc/02-current-project-state.md\`, \`.memoc/04-handoff.md\`, \`.memoc/wiki/index.md\`, project/knowledge wiki pages, or actor worklogs.
 
 \`.memoc/session-summary.md\` is a startup snapshot, not a timeline. Rewrite it in place, do not append old work. If it exceeds 800B, run \`memoc trim-summary\`; it archives the previous summary and rewrites a compact version. Put completed history in actor worklogs, and put unfinished/risky resume detail in \`.memoc/04-handoff.md\`.
 
 ## Updating The Wiki
 
-Create a new Markdown file under \`.memoc/wiki/\` when synthesized knowledge should compound across sessions.
+Create wiki pages under the right layer when knowledge should compound across sessions.
 
 - \`.memoc/raw/\`: immutable source material copied or referenced by \`memoc ingest\`.
-- \`.memoc/wiki/sources/\`: provenance records.
-- \`.memoc/wiki/topics/\`: synthesized topic pages.
-- \`.memoc/wiki/global/\`: project-wide principles.
+- \`.memoc/wiki/project/\`: implementation docs for this repo.
+- \`.memoc/wiki/knowledge/sources/\`: provenance records.
+- \`.memoc/wiki/knowledge/topics/\`: synthesized topic pages.
+- \`.memoc/wiki/knowledge/global/\`: broader source-backed principles.
 
 After creating or editing wiki pages:
 1. Update \`.memoc/wiki/index.md\`.
@@ -1749,7 +1842,7 @@ memoc lint-wiki
 
 ## Updating System Docs
 
-Create or update \`.memoc/systems/*.md\` when a subsystem needs durable detail.
+Create or update \`.memoc/wiki/project/*.md\` when a subsystem needs durable implementation detail.
 
 Examples: \`frontend.md\`, \`deployment.md\`, \`data-sources.md\`, \`auth.md\`
 `;
@@ -1758,19 +1851,11 @@ Examples: \`frontend.md\`, \`deployment.md\`, \`data-sources.md\`, \`auth.md\`
 function tplSystemsReadme() {
   return `# Systems
 
-Subsystem documentation for agents.
+Legacy location. Project implementation docs now live in [Project Wiki](../wiki/project/README.md).
 
-## How To Use
+## Migration
 
-Create a new \`.md\` file here when a subsystem becomes important enough that future agents should not rediscover it from scratch.
-
-## Examples
-
-- \`frontend.md\` — component library, routing, state management
-- \`deployment.md\` — CI/CD, environment setup, release process
-- \`data-sources.md\` — databases, APIs, file sources
-- \`auth.md\` — authentication and authorization
-- \`design-system.md\` — colors, typography, spacing
+Run \`memoc update\` to move an existing \`.memoc/systems/\` directory into \`.memoc/raw/legacy-systems/\`.
 `;
 }
 
@@ -1783,7 +1868,7 @@ Immutable source material for the memoc wiki.
 
 - Do not edit raw files after ingest; create a new raw file or source record when material changes.
 - Do not read raw files at session start. Search or open the linked source/topic page first.
-- Source records under [wiki/sources](../wiki/sources/README.md) summarize raw material and link to affected topics.
+- Source records under [knowledge/sources](../wiki/knowledge/sources/README.md) summarize raw material and link to affected topics.
 
 ## Subdirectories
 
@@ -1802,7 +1887,7 @@ Local files copied by \`memoc ingest <path>\`.
 ## Related
 
 - [Raw Sources](../README.md)
-- [Source Records](../../wiki/sources/README.md)
+- [Source Records](../../wiki/knowledge/sources/README.md)
 `;
 }
 
@@ -1814,7 +1899,7 @@ URL references recorded by \`memoc ingest <url>\`.
 ## Related
 
 - [Raw Sources](../README.md)
-- [Source Records](../../wiki/sources/README.md)
+- [Source Records](../../wiki/knowledge/sources/README.md)
 `;
 }
 
@@ -1826,7 +1911,7 @@ Conversation excerpts that should feed durable wiki synthesis.
 ## Related
 
 - [Raw Sources](../README.md)
-- [Source Records](../../wiki/sources/README.md)
+- [Source Records](../../wiki/knowledge/sources/README.md)
 `;
 }
 
@@ -1838,44 +1923,80 @@ Long-form docs, specs, and references kept separate from synthesized topic pages
 ## Related
 
 - [Raw Sources](../README.md)
-- [Source Records](../../wiki/sources/README.md)
+- [Source Records](../../wiki/knowledge/sources/README.md)
 `;
 }
 
 function tplWikiIndex() {
   return `# Wiki Index
 
-Persistent LLM-maintained project wiki.
+Persistent LLM-maintained wiki hub.
 
-## Graph Hubs
+## Wiki Layers
 
+- [Project Wiki](project/README.md) — this repo's implementation docs.
+- [Knowledge Wiki](knowledge/README.md) — source-backed concepts, external docs, glossary, questions.
 - [Raw Sources](../raw/README.md) — immutable source material before synthesis.
-- [Sources](sources.md) — provenance, ingests, and source-to-topic links.
-- [Topics](topics/README.md) — synthesized topic pages.
-- [Global](global/README.md) — project-wide principles and long-lived direction.
-- [Glossary](glossary.md) — terms, aliases, and canonical page names.
-- [Open Questions](questions.md) — unresolved questions and research leads.
-- [Wiki Lint](lint.md) — graph health, orphan checks, contradictions, stale claims.
 
-## Pages
+## Project Pages
 
-_None yet. Add every wiki page here with a relative Markdown link and one-line summary._
+_None yet. Link implementation pages from [project/README.md](project/README.md)._
 
-## Saved Queries
+## Knowledge Pages
 
-_None yet. Use \`memoc note "<title>"\` for durable analysis or query results that should become a topic._
-
-## Subdirectories
-
-- [sources/](sources/README.md) — provenance records
-- [topics/](topics/README.md) — synthesized topic pages
-- [global/](global/README.md) — project-wide principles
+_None yet. Use \`memoc ingest\` or \`memoc note "<title>"\` to create source-backed knowledge pages._
 
 ## Related Core Memory
 
 - [Agent Index](../00-agent-index.md)
 - [Project Brief](../00-project-brief.md)
 - [Current Project State](../02-current-project-state.md)
+`;
+}
+
+function tplWikiProjectReadme() {
+  return `# Project Wiki
+
+Implementation docs for this repository.
+
+## Project Pages
+
+_None yet. Add pages like \`architecture.md\`, \`auth.md\`, \`gateway.md\`, \`deployment.md\`, or \`ui-dashboard.md\`._
+
+## How To Use
+
+- Read project pages before editing the matching subsystem.
+- Keep pages implementation-specific: files, flows, invariants, commands, risks.
+- Link to [Knowledge Wiki](../knowledge/README.md) when external concepts or sources matter.
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Current Project State](../../02-current-project-state.md)
+- [Decisions](../../03-decisions.md)
+- [Knowledge Wiki](../knowledge/README.md)
+`;
+}
+
+function tplWikiKnowledgeReadme() {
+  return `# Knowledge Wiki
+
+Source-backed concepts, external docs, glossary, questions, and durable research.
+
+## Hubs
+
+- [Sources](sources.md) — provenance, ingests, and source-to-topic links.
+- [Topics](topics/README.md) — synthesized topic pages.
+- [Global](global/README.md) — broad source-backed principles.
+- [Glossary](glossary.md) — terms, aliases, and canonical page names.
+- [Open Questions](questions.md) — unresolved questions and research leads.
+- [Wiki Lint](lint.md) — graph health, orphan checks, contradictions, stale claims.
+
+## Related
+
+- [Wiki Index](../index.md)
+- [Project Wiki](../project/README.md)
+- [Raw Sources](../../raw/README.md)
 `;
 }
 
@@ -1886,14 +2007,15 @@ Provenance index for conversations, URLs, docs, issues, and files that feed the 
 
 ## Source Records
 
-_No sources recorded yet. Link each source record to the topic/global pages it affects._
+_No sources recorded yet. Link each source record to the topic/global/project pages it affects._
 
 Use \`memoc ingest <path-or-url>\` to create source records without loading raw material into startup context.
 
 ## Related
 
-- [Wiki Index](index.md)
-- [Raw Sources](../raw/README.md)
+- [Wiki Index](../index.md)
+- [Knowledge Wiki](README.md)
+- [Raw Sources](../../raw/README.md)
 - [Source Records Directory](sources/README.md)
 - [Topics](topics/README.md)
 - [Open Questions](questions.md)
@@ -1907,11 +2029,11 @@ Canonical names, aliases, and short definitions for project terms.
 
 ## Terms
 
-_No terms defined yet. Link terms to their canonical topic, global, source, or system page._
+_No terms defined yet. Link terms to their canonical topic, global, source, or project page._
 
 ## Related
 
-- [Wiki Index](index.md)
+- [Knowledge Wiki](README.md)
 - [Topics](topics/README.md)
 - [Global](global/README.md)
 - [Open Questions](questions.md)
@@ -1929,7 +2051,7 @@ _No open questions yet. Link each question to affected pages and sources._
 
 ## Related
 
-- [Wiki Index](index.md)
+- [Knowledge Wiki](README.md)
 - [Sources](sources.md)
 - [Topics](topics/README.md)
 - [Wiki Lint](lint.md)
@@ -1943,14 +2065,14 @@ Provenance records for conversations, URLs, docs, and issues.
 
 ## How To Link
 
-- Keep source pages short: summary, raw location, affected pages, open synthesis work.
+- Keep source pages short: summary, raw location, affected project/knowledge pages, open synthesis work.
 - Link each source record back to [Sources](../sources.md).
-- Link outward to every topic, global page, system doc, or question that the source changes.
+- Link outward to every topic, global page, project wiki page, or question that the source changes.
 - Prefer one source per file when the source is substantial enough to cite later.
 
 ## Related
 
-- [Wiki Index](../index.md)
+- [Knowledge Wiki](../README.md)
 - [Sources](../sources.md)
 - [Topics](../topics/README.md)
 - [Open Questions](../questions.md)
@@ -1968,13 +2090,13 @@ _None yet. Add pages here when a concept deserves durable synthesis._
 
 ## How To Link
 
-- Each topic page should link back to [Wiki Index](../index.md) and this [Topics](README.md) page.
+- Each topic page should link back to [Knowledge Wiki](../README.md) and this [Topics](README.md) page.
 - Link to related topics, source records, glossary terms, and open questions in prose or a \`## Related\` section.
 - Avoid orphan pages: every topic needs at least one inbound link from an index, source, or related topic.
 
 ## Related
 
-- [Wiki Index](../index.md)
+- [Knowledge Wiki](../README.md)
 - [Sources](../sources.md)
 - [Glossary](../glossary.md)
 - [Wiki Lint](../lint.md)
@@ -1988,18 +2110,18 @@ Project-wide principles, positioning, and long-lived direction.
 
 ## Global Pages
 
-_None yet. Add pages here for broad context that many topic/system pages should reference._
+_None yet. Add pages here for broad source-backed context that many topic/project pages should reference._
 
 ## How To Link
 
-- Link global pages back to [Wiki Index](../index.md), this [Global](README.md) page, and affected topic/system docs.
+- Link global pages back to [Knowledge Wiki](../README.md), this [Global](README.md) page, and affected topic/project docs.
 - Use global pages for durable synthesis, not temporary task notes.
 
 ## Related
 
-- [Wiki Index](../index.md)
-- [Project Brief](../../00-project-brief.md)
-- [Project Rules](../../06-project-rules.md)
+- [Knowledge Wiki](../README.md)
+- [Project Brief](../../../00-project-brief.md)
+- [Project Rules](../../../06-project-rules.md)
 - [Topics](../topics/README.md)
 `;
 }
@@ -2010,8 +2132,8 @@ Last checked: ${nowISO()}
 
 ## Graph Checks
 
-- Every wiki page is listed from [Wiki Index](index.md) or a directory README.
-- Every wiki page links back to an index, hub, source, topic, or related page.
+- Every wiki page is listed from [Wiki Index](../index.md) or a directory README.
+- Every wiki page links back to an index, project hub, knowledge hub, source, topic, or related page.
 - Important concepts mentioned in two or more places have their own linked page.
 - Source records link to the pages they update, and those pages link back to sources when provenance matters.
 
@@ -2025,7 +2147,7 @@ _None._
 
 ## Related
 
-- [Wiki Index](index.md)
+- [Knowledge Wiki](README.md)
 - [Sources](sources.md)
 - [Topics](topics/README.md)
 - [Open Questions](questions.md)
@@ -2060,11 +2182,11 @@ Use this local skill after meaningful project work so future agents can continue
 - Check \`.memoc/05-done-checklist.md\` before saying substantial work is complete.
 - Update \`.memoc/06-project-rules.md\` when the user gives durable preferences.
 - Create a short actor worklog with \`memoc work "<title>" --from-git\` for meaningful changes, decisions, and handoffs.
-- Create or update \`.memoc/systems/*.md\` when a subsystem needs durable explanation.
-- Create or update \`.memoc/wiki/*.md\` when synthesized knowledge should compound over time.
+- Create or update \`.memoc/wiki/project/*.md\` when a subsystem needs durable implementation explanation.
+- Create or update \`.memoc/wiki/knowledge/*.md\` when source-backed concepts should compound over time.
 - Use \`memoc ingest <path-or-url>\` for source material and \`memoc note "<title>"\` for durable query results or analysis.
 - Use \`memoc work "<title>" --from-git\` for meaningful shared-repo work so details are saved in actor-scoped worklog files instead of causing shared-file conflicts.
-- Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, add relative Markdown links between related pages, and include a \`## Related\` section on every new wiki page.
+- Keep the wiki graph connected: update \`.memoc/wiki/index.md\`, link project pages under \`.memoc/wiki/project/\`, link knowledge pages under \`.memoc/wiki/knowledge/\`, and include a \`## Related\` section on every new wiki page.
 - Run \`memoc lint-wiki\` after wiki/source/topic edits and address broken links before finishing.
 - Keep completed history in actor worklogs; keep current-state files short.
 - Move completed session details out of \`session-summary.md\` into \`.memoc/worklog/<actor>/YYYY-MM/\`; move incomplete/risky resume details into \`04-handoff.md\`.
@@ -2073,12 +2195,12 @@ Use this local skill after meaningful project work so future agents can continue
 
 ## Wiki Link Rules
 
-- Use relative Markdown links that Obsidian can follow, for example \`[Glossary](glossary.md)\` or \`[Topics](topics/README.md)\`.
-- Every wiki page must have at least one inbound link from \`wiki/index.md\`, a directory README, a source page, or a related topic.
+- Use relative Markdown links that Obsidian can follow, for example \`[Project Wiki](project/README.md)\` or \`[Topics](knowledge/topics/README.md)\`.
+- Every wiki page must have at least one inbound link from \`wiki/index.md\`, a directory README, a source page, project page, or related topic.
 - Every wiki page must link outward to its parent hub plus 1-5 genuinely related pages when they exist.
 - Prefer links in normal prose when the connection is meaningful; use \`## Related\` for compact navigation.
 - When a concept appears in multiple pages, create or update a topic/glossary page and link all mentions to it.
-- After wiki edits, check \`.memoc/wiki/lint.md\` and note orphan pages, missing backlinks, contradictions, or stale claims.
+- After wiki edits, check \`.memoc/wiki/knowledge/lint.md\` and note orphan pages, missing backlinks, contradictions, or stale claims.
 
 ## Concrete Triggers
 
@@ -2265,20 +2387,21 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, 'actors/README.md'),          tplActorsReadme],
       [path.join(memDir, 'worklog/README.md'),         tplWorklogReadme],
       [path.join(memDir, 'memoc-usage.md'),    tplMemocUsage],
-      [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
       [path.join(memDir, 'raw/README.md'),             tplRawReadme],
       [path.join(memDir, 'raw/files/README.md'),       tplRawFilesReadme],
       [path.join(memDir, 'raw/urls/README.md'),        tplRawUrlsReadme],
       [path.join(memDir, 'raw/conversations/README.md'), tplRawConversationsReadme],
       [path.join(memDir, 'raw/docs/README.md'),        tplRawDocsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
-      [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
-      [path.join(memDir, 'wiki/glossary.md'),          tplWikiGlossary],
-      [path.join(memDir, 'wiki/questions.md'),         tplWikiQuestions],
-      [path.join(memDir, 'wiki/lint.md'),              tplWikiLint],
-      [path.join(memDir, 'wiki/sources/README.md'),    tplWikiSourcesReadme],
-      [path.join(memDir, 'wiki/topics/README.md'),     tplWikiTopicsReadme],
-      [path.join(memDir, 'wiki/global/README.md'),     tplWikiGlobalReadme],
+      [path.join(memDir, 'wiki/project/README.md'),    tplWikiProjectReadme],
+      [path.join(memDir, 'wiki/knowledge/README.md'),  tplWikiKnowledgeReadme],
+      [path.join(memDir, 'wiki/knowledge/sources.md'), tplWikiSources],
+      [path.join(memDir, 'wiki/knowledge/glossary.md'), tplWikiGlossary],
+      [path.join(memDir, 'wiki/knowledge/questions.md'), tplWikiQuestions],
+      [path.join(memDir, 'wiki/knowledge/lint.md'),    tplWikiLint],
+      [path.join(memDir, 'wiki/knowledge/sources/README.md'), tplWikiSourcesReadme],
+      [path.join(memDir, 'wiki/knowledge/topics/README.md'), tplWikiTopicsReadme],
+      [path.join(memDir, 'wiki/knowledge/global/README.md'), tplWikiGlobalReadme],
       [path.join(dir,    'skills/project-memory-maintainer/SKILL.md'), tplSkillMaintainer],
     ];
     for (const [fp, tpl] of staticFiles) {
@@ -2322,7 +2445,7 @@ function run(dir, forceUpdate, action = 'update') {
     if (fs.existsSync(llmsPath)) {
       updateSection(llmsPath, HDR_S,  HDR_E,  headerInner(p));
       updateSection(llmsPath, CORE_S, CORE_E, coreLlmsInner());
-      updateSection(llmsPath, SYS_S,  SYS_E,  systemsLlmsInner(dir));
+      updateSection(llmsPath, SYS_S,  SYS_E,  projectWikiLlmsInner(dir));
       updateSection(llmsPath, WIKI_S, WIKI_E, wikiLlmsInner(dir));
       mark('update', 'llms.txt');
     } else {
@@ -2382,6 +2505,9 @@ function run(dir, forceUpdate, action = 'update') {
       mark(writeChanged(fp, tpl()) ? 'update' : 'skip', rel);
     }
 
+    migrateKnowledgeWiki(dir, mark);
+    archiveLegacySystems(dir, mark);
+
     // Static indexes/scaffolds — add if missing; content may be user- or command-owned.
     const addIfMissing = [
       [path.join(memDir, '03-decisions.md'),           tplDecisions],
@@ -2390,20 +2516,21 @@ function run(dir, forceUpdate, action = 'update') {
       [path.join(memDir, 'activity.md'),               tplActivity],
       [path.join(memDir, 'actors/README.md'),          tplActorsReadme],
       [path.join(memDir, 'worklog/README.md'),         tplWorklogReadme],
-      [path.join(memDir, 'systems/README.md'),         tplSystemsReadme],
       [path.join(memDir, 'raw/README.md'),             tplRawReadme],
       [path.join(memDir, 'raw/files/README.md'),       tplRawFilesReadme],
       [path.join(memDir, 'raw/urls/README.md'),        tplRawUrlsReadme],
       [path.join(memDir, 'raw/conversations/README.md'), tplRawConversationsReadme],
       [path.join(memDir, 'raw/docs/README.md'),        tplRawDocsReadme],
       [path.join(memDir, 'wiki/index.md'),             tplWikiIndex],
-      [path.join(memDir, 'wiki/sources.md'),           tplWikiSources],
-      [path.join(memDir, 'wiki/glossary.md'),          tplWikiGlossary],
-      [path.join(memDir, 'wiki/questions.md'),         tplWikiQuestions],
-      [path.join(memDir, 'wiki/lint.md'),              tplWikiLint],
-      [path.join(memDir, 'wiki/sources/README.md'),    tplWikiSourcesReadme],
-      [path.join(memDir, 'wiki/topics/README.md'),     tplWikiTopicsReadme],
-      [path.join(memDir, 'wiki/global/README.md'),     tplWikiGlobalReadme],
+      [path.join(memDir, 'wiki/project/README.md'),    tplWikiProjectReadme],
+      [path.join(memDir, 'wiki/knowledge/README.md'),  tplWikiKnowledgeReadme],
+      [path.join(memDir, 'wiki/knowledge/sources.md'), tplWikiSources],
+      [path.join(memDir, 'wiki/knowledge/glossary.md'), tplWikiGlossary],
+      [path.join(memDir, 'wiki/knowledge/questions.md'), tplWikiQuestions],
+      [path.join(memDir, 'wiki/knowledge/lint.md'),    tplWikiLint],
+      [path.join(memDir, 'wiki/knowledge/sources/README.md'), tplWikiSourcesReadme],
+      [path.join(memDir, 'wiki/knowledge/topics/README.md'), tplWikiTopicsReadme],
+      [path.join(memDir, 'wiki/knowledge/global/README.md'), tplWikiGlobalReadme],
     ];
     for (const [fp, tpl] of addIfMissing) {
       const rel = path.relative(dir, fp);
@@ -2416,9 +2543,8 @@ function run(dir, forceUpdate, action = 'update') {
       path.join(memDir, '02-current-project-state.md'),
       path.join(memDir, '04-handoff.md'),
       path.join(memDir, '06-project-rules.md'),
-      path.join(memDir, 'systems/README.md'),
       path.join(memDir, 'wiki/index.md'),
-      path.join(memDir, 'wiki/sources.md'),
+      path.join(memDir, 'wiki/knowledge/sources.md'),
       path.join(memDir, 'wiki/glossary.md'),
       path.join(memDir, 'wiki/questions.md'),
       path.join(memDir, 'wiki/lint.md'),
@@ -2778,7 +2904,7 @@ function runWikiLint(dir) {
     if (count === 0) warnings.push(`${rel}: no inbound wiki links`);
   }
 
-  const lintPath = path.join(wikiDir, 'lint.md');
+  const lintPath = path.join(wikiDir, 'knowledge', 'lint.md');
   write(lintPath, wikiLintReport(issues, warnings));
   ensureMemocFrontmatter(lintPath, dir);
 
@@ -2786,7 +2912,7 @@ function runWikiLint(dir) {
   console.log(`    Files     ${files.length}`);
   console.log(`    Issues    ${issues.length}`);
   console.log(`    Warnings  ${warnings.length}`);
-  console.log('    Report    .memoc/wiki/lint.md');
+  console.log('    Report    .memoc/wiki/knowledge/lint.md');
   if (issues.length) {
     console.log('\n  Issues:');
     for (const issue of issues.slice(0, 10)) console.log(`    - ${issue}`);
@@ -2802,8 +2928,8 @@ Last checked: ${nowISO()}
 
 ## Graph Checks
 
-- Every wiki page is listed from [Wiki Index](index.md) or a directory README.
-- Every wiki page links back to an index, hub, source, topic, or related page.
+- Every wiki page is listed from [Wiki Index](../index.md) or a directory README.
+- Every wiki page links back to an index, project hub, knowledge hub, source, topic, or related page.
 - Important concepts mentioned in two or more places have their own linked page.
 - Source records link to the pages they update, and those pages link back to sources when provenance matters.
 
@@ -2842,7 +2968,7 @@ function runIngest(dir) {
     const rawPath = uniquePath(path.join(dir, '.memoc', 'raw', 'urls', `${slug}.md`));
     write(rawPath, rawUrlRecord(title, target));
     ensureMemocFrontmatter(rawPath, dir);
-    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'sources'), rawPath);
+    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources'), rawPath);
     rawDisplay = normRel(dir, rawPath);
   } else {
     const abs = path.resolve(dir, target);
@@ -2854,16 +2980,16 @@ function runIngest(dir) {
     const rawPath = uniquePath(path.join(dir, '.memoc', 'raw', 'files', `${slug}${ext}`));
     fs.mkdirSync(path.dirname(rawPath), { recursive: true });
     fs.copyFileSync(abs, rawPath);
-    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'sources'), rawPath);
+    rawRef = pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources'), rawPath);
     rawDisplay = normRel(dir, rawPath);
   }
 
-  const sourcePath = uniquePath(path.join(dir, '.memoc', 'wiki', 'sources', `${slug}.md`));
+  const sourcePath = uniquePath(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources', `${slug}.md`));
   write(sourcePath, sourceRecord(title, rawRef, target, isUrl));
   ensureMemocFrontmatter(sourcePath, dir);
-  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources.md'), 'Source Records', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'needs synthesis');
-  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'sources', 'README.md'), 'Source Records', path.basename(sourcePath), title, 'source record');
-  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Pages', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'source record');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources.md'), 'Source Records', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki', 'knowledge'), sourcePath), title, 'needs synthesis');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources', 'README.md'), 'Source Records', path.basename(sourcePath), title, 'source record');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Knowledge Pages', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), sourcePath), title, 'source record');
   console.log('\n  memoc ingest\n');
   console.log(`    Source record  ${normRel(dir, sourcePath)}`);
   console.log(`    Raw reference  ${rawDisplay}`);
@@ -2887,11 +3013,11 @@ function runNote(dir) {
   }
 
   ensureMemocBase(dir);
-  const topicPath = uniquePath(path.join(dir, '.memoc', 'wiki', 'topics', `${slugify(title, 'topic')}.md`));
+  const topicPath = uniquePath(path.join(dir, '.memoc', 'wiki', 'knowledge', 'topics', `${slugify(title, 'topic')}.md`));
   write(topicPath, topicNote(title, body));
   ensureMemocFrontmatter(topicPath, dir);
-  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'topics', 'README.md'), 'Topic Pages', path.basename(topicPath), title, 'topic note');
-  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Saved Queries', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), topicPath), title, 'saved query/topic note');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'knowledge', 'topics', 'README.md'), 'Topic Pages', path.basename(topicPath), title, 'topic note');
+  addWikiListItem(path.join(dir, '.memoc', 'wiki', 'index.md'), 'Knowledge Pages', pathRelativeMarkdown(path.join(dir, '.memoc', 'wiki'), topicPath), title, 'saved query/topic note');
   console.log('\n  memoc note\n');
   console.log(`    Topic  ${normRel(dir, topicPath)}`);
   console.log('    Next   Link related sources/topics, then run memoc lint-wiki.');
@@ -2903,9 +3029,15 @@ function ensureMemocBase(dir) {
   const memDir = path.join(dir, '.memoc');
   const files = [
     [path.join(memDir, 'wiki/index.md'), tplWikiIndex],
-    [path.join(memDir, 'wiki/sources.md'), tplWikiSources],
-    [path.join(memDir, 'wiki/sources/README.md'), tplWikiSourcesReadme],
-    [path.join(memDir, 'wiki/topics/README.md'), tplWikiTopicsReadme],
+    [path.join(memDir, 'wiki/project/README.md'), tplWikiProjectReadme],
+    [path.join(memDir, 'wiki/knowledge/README.md'), tplWikiKnowledgeReadme],
+    [path.join(memDir, 'wiki/knowledge/sources.md'), tplWikiSources],
+    [path.join(memDir, 'wiki/knowledge/sources/README.md'), tplWikiSourcesReadme],
+    [path.join(memDir, 'wiki/knowledge/topics/README.md'), tplWikiTopicsReadme],
+    [path.join(memDir, 'wiki/knowledge/global/README.md'), tplWikiGlobalReadme],
+    [path.join(memDir, 'wiki/knowledge/glossary.md'), tplWikiGlossary],
+    [path.join(memDir, 'wiki/knowledge/questions.md'), tplWikiQuestions],
+    [path.join(memDir, 'wiki/knowledge/lint.md'), tplWikiLint],
     [path.join(memDir, 'raw/README.md'), tplRawReadme],
     [path.join(memDir, 'raw/files/README.md'), tplRawFilesReadme],
     [path.join(memDir, 'raw/urls/README.md'), tplRawUrlsReadme],
@@ -2965,7 +3097,7 @@ _Summarize only the durable facts future agents should reuse._
 
 ## Synthesis Tasks
 
-- [ ] Create or update affected topic/global/system pages.
+- [ ] Create or update affected topic/global/project pages.
 - [ ] Link those pages back to this source when provenance matters.
 - [ ] Run \`memoc lint-wiki\`.
 
@@ -2973,7 +3105,7 @@ _Summarize only the durable facts future agents should reuse._
 
 - [Sources Index](../sources.md)
 - [Source Records](README.md)
-- [Wiki Index](../index.md)
+- [Knowledge Wiki](../README.md)
 `;
 }
 
@@ -2994,7 +3126,7 @@ _None yet._
 
 ## Related
 
-- [Wiki Index](../index.md)
+- [Knowledge Wiki](../README.md)
 - [Topics](README.md)
 - [Glossary](../glossary.md)
 `;
@@ -3283,8 +3415,9 @@ function searchPriority(file, scope = 'memory') {
   ];
   const exact = order.indexOf(normalized);
   if (exact !== -1) return exact;
-  if (normalized.startsWith('.memoc/systems/')) return 20;
-  if (normalized.startsWith('.memoc/wiki/')) return 30;
+  if (normalized.startsWith('.memoc/wiki/project/')) return 20;
+  if (normalized.startsWith('.memoc/wiki/knowledge/')) return 30;
+  if (normalized.startsWith('.memoc/wiki/')) return 35;
   if (normalized.startsWith('skills/')) return 40;
   return 50;
 }
