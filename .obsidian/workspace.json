@@ -4,21 +4,19 @@
     "type": "split",
     "children": [
       {
-        "id": "2e315931232d7a0e",
+        "id": "90c23938e762469a",
         "type": "tabs",
         "children": [
           {
-            "id": "959687f619a89b5e",
+            "id": "945941d38436158b",
             "type": "leaf",
             "state": {
-              "type": "markdown",
+              "type": "vscode-editor",
               "state": {
-                "file": "README.md",
-                "mode": "source",
-                "source": false
+                "file": "package.json"
               },
               "icon": "lucide-file",
-              "title": "README"
+              "title": "package"
             }
           }
         ]
@@ -182,8 +180,9 @@
       "bases:새 베이스 생성하기": false
     }
   },
-  "active": "959687f619a89b5e",
+  "active": "945941d38436158b",
   "lastOpenFiles": [
+    "README.md",
     "workspace.json"
   ]
 }
