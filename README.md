@@ -82,6 +82,12 @@ npx @kevin0181/memoc init
 # Re-scan project and refresh managed sections
 npx @kevin0181/memoc update
 
+# Shared repo activity tracking
+npx @kevin0181/memoc actor
+npx @kevin0181/memoc actor set neneee
+npx @kevin0181/memoc work "Auth refresh fix"
+npx @kevin0181/memoc activity
+
 # Print current status in ~10 lines
 npx @kevin0181/memoc summary
 
@@ -165,6 +171,9 @@ llms.txt                                     ← LLM-facing project map
   04-handoff.md                              ← Resume context, verified/unverified
   06-project-rules.md                        ← User preferences
   log.md                                     ← Append-only activity log
+  activity.md                                ← Short shared activity index
+  actors/                                    ← Actor profiles for shared repos
+  worklog/                                   ← Per-actor work records to reduce conflicts
   raw/                                       ← Immutable source material, not a startup read
   systems/                                   ← Subsystem docs
   wiki/                                      ← Synthesized knowledge base
@@ -244,6 +253,20 @@ Add more agents on demand:
 | `add gemini` | `GEMINI.md` |
 
 Running `update` refreshes managed blocks in all existing agent files.
+
+## Shared Repos
+
+Use `memoc work "<title>"` for meaningful work in shared repositories. It creates a new actor-scoped file under `.memoc/worklog/YYYY-MM/`, which avoids many append conflicts in shared files like `log.md`.
+
+Actor detection order:
+
+1. `MEMOC_ACTOR`
+2. `.memoc/local/actor` from `memoc actor set <name>`
+3. `git config user.name`
+4. `git config user.email`
+5. OS username
+
+`.memoc/local/` is ignored by git so each machine can keep its own actor setting.
 
 ---
 

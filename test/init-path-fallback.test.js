@@ -628,3 +628,67 @@ test('upgrade repairs nested frontmatter produced by older BOM handling', () => 
     assert.doesNotMatch(skill, /\uFEFF/);
   });
 });
+
+test('actor commands use local override and work creates conflict-light activity files', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    execFileSync(process.execPath, [cliPath, 'actor', 'set', 'neneee'], { cwd: dir, encoding: 'utf8', env });
+    const actorOutput = execFileSync(process.execPath, [cliPath, 'actor'], { cwd: dir, encoding: 'utf8', env });
+    assert.match(actorOutput, /Actor\s+neneee/);
+    assert.match(actorOutput, /\.memoc\/local\/actor/);
+    assert.equal(fs.readFileSync(path.join(dir, '.memoc', 'local', 'actor'), 'utf8').trim(), 'neneee');
+    assert.match(fs.readFileSync(path.join(dir, '.gitignore'), 'utf8'), /\.memoc\/local\//);
+
+    const workOutput = execFileSync(process.execPath, [cliPath, 'work', 'Auth refresh fix', '--body', 'Fixed token refresh state.'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+    assert.match(workOutput, /Actor\s+neneee/);
+    assert.match(workOutput, /\.memoc\/worklog\/\d{4}-\d{2}\//);
+
+    const monthDirs = fs.readdirSync(path.join(dir, '.memoc', 'worklog')).filter(name => /^\d{4}-\d{2}$/.test(name));
+    assert.equal(monthDirs.length, 1);
+    const entries = fs.readdirSync(path.join(dir, '.memoc', 'worklog', monthDirs[0])).filter(name => name.includes('auth-refresh-fix'));
+    assert.equal(entries.length, 1);
+    const work = fs.readFileSync(path.join(dir, '.memoc', 'worklog', monthDirs[0], entries[0]), 'utf8');
+    assert.match(work, /type: worklog/);
+    assert.match(work, /  - memoc\/worklog/);
+    assert.match(work, /actor: neneee/);
+    assert.match(work, /Fixed token refresh state/);
+
+    const actorProfile = fs.readFileSync(path.join(dir, '.memoc', 'actors', 'neneee.md'), 'utf8');
+    assert.match(actorProfile, /type: actor/);
+    assert.match(actorProfile, /  - memoc\/actor/);
+
+    const activity = execFileSync(process.execPath, [cliPath, 'activity'], { cwd: dir, encoding: 'utf8', env });
+    assert.match(activity, /Auth refresh fix/);
+    assert.match(activity, /neneee/);
+  });
+});
+
+test('actor falls back to git config when local actor is unset', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      MEMOC_ACTOR: '',
+    };
+    execFileSync('git', ['init'], { cwd: dir, encoding: 'utf8' });
+    execFileSync('git', ['config', 'user.name', 'Jane Doe'], { cwd: dir, encoding: 'utf8' });
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const actorOutput = execFileSync(process.execPath, [cliPath, 'actor'], { cwd: dir, encoding: 'utf8', env });
+    assert.match(actorOutput, /Actor\s+jane-doe/);
+    assert.match(actorOutput, /git config user\.name/);
+  });
+});
