@@ -463,6 +463,47 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
       ].join('\n'),
       'utf8'
     );
+    for (const name of ['sources', 'topics', 'global']) {
+      fs.mkdirSync(path.join(dir, '.memoc', 'wiki', name), { recursive: true });
+      fs.writeFileSync(
+        path.join(dir, '.memoc', 'wiki', name, 'README.md'),
+        [
+          `# ${name[0].toUpperCase()}${name.slice(1)}`,
+          '',
+          name === 'sources' ? 'Provenance records for conversations, URLs, docs, and issues.' : '',
+          name === 'topics' ? 'Synthesized topic pages that compound knowledge across sessions.' : '',
+          name === 'global' ? 'Project-wide principles, positioning, and long-lived direction.' : '',
+          '',
+          '## Related',
+          '',
+          '- [Wiki Index](../index.md)',
+          '',
+        ].join('\n'),
+        'utf8'
+      );
+    }
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'raw', 'README.md'),
+      [
+        '# Raw Sources',
+        '',
+        '- Source records under [wiki/sources](../wiki/sources/README.md) summarize raw material.',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
+    fs.writeFileSync(
+      path.join(dir, '.memoc', 'raw', 'files', 'README.md'),
+      [
+        '# Raw Files',
+        '',
+        '## Related',
+        '',
+        '- [Source Records](../../wiki/sources/README.md)',
+        '',
+      ].join('\n'),
+      'utf8'
+    );
 
     execFileSync(process.execPath, [cliPath, 'upgrade'], { cwd: dir, encoding: 'utf8', env });
 
@@ -470,6 +511,8 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
     const glossary = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'glossary.md'), 'utf8');
     const sources = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'sources.md'), 'utf8');
     const global = fs.readFileSync(path.join(dir, '.memoc', 'wiki', 'knowledge', 'global', 'README.md'), 'utf8');
+    const rawReadme = fs.readFileSync(path.join(dir, '.memoc', 'raw', 'README.md'), 'utf8');
+    const rawFiles = fs.readFileSync(path.join(dir, '.memoc', 'raw', 'files', 'README.md'), 'utf8');
 
     assert.match(wikiIndex, /## Wiki Layers/);
     assert.match(wikiIndex, /\[Knowledge Wiki\]\(knowledge\/README\.md\)/);
@@ -484,6 +527,11 @@ test('upgrade refreshes default wiki scaffold links without overwriting user wik
     assert.match(global, /\[Project Rules\]\(\.\.\/\.\.\/\.\.\/06-project-rules\.md\)/);
     assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'glossary.md')), false);
     assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'sources.md')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'sources')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'topics')), false);
+    assert.equal(fs.existsSync(path.join(dir, '.memoc', 'wiki', 'global')), false);
+    assert.match(rawReadme, /\[wiki\/sources\]\(\.\.\/wiki\/knowledge\/sources\/README\.md\)/);
+    assert.match(rawFiles, /\[Source Records\]\(\.\.\/\.\.\/wiki\/knowledge\/sources\/README\.md\)/);
   });
 });
 

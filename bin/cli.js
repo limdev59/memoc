@@ -263,6 +263,23 @@ function archiveLegacySystems(dir, mark) {
   mark('move', `${path.relative(dir, systemsPath)} -> ${path.relative(dir, archivePath)}`);
 }
 
+function isDefaultLegacyWikiDirectory(dirPath) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(dirPath).filter(name => !name.startsWith('.'));
+  } catch {
+    return false;
+  }
+  if (entries.length !== 1 || entries[0] !== 'README.md') return false;
+
+  const src = safeRead(path.join(dirPath, 'README.md'));
+  const name = path.basename(dirPath);
+  if (name === 'sources') return src.includes('# Sources') && src.includes('Provenance records');
+  if (name === 'topics') return src.includes('# Topics') && src.includes('Synthesized topic pages');
+  if (name === 'global') return src.includes('# Global') && src.includes('Project-wide principles');
+  return false;
+}
+
 function migrateKnowledgeWiki(dir, mark) {
   const wikiDir = path.join(dir, '.memoc', 'wiki');
   const knowledgeDir = path.join(wikiDir, 'knowledge');
@@ -283,6 +300,16 @@ function migrateKnowledgeWiki(dir, mark) {
       try {
         const st = fs.statSync(dest);
         if (st.isFile() && isDefaultKnowledgeScaffold(dest)) fs.unlinkSync(dest);
+        else if (st.isDirectory() && fs.statSync(src).isDirectory()) {
+          if (isDefaultLegacyWikiDirectory(src)) {
+            fs.rmSync(src, { recursive: true, force: true });
+            mark('remove', `${path.relative(dir, src)} (legacy wiki scaffold)`);
+          } else {
+            const archived = movePathUnique(src, path.join(dir, '.memoc', 'raw', 'legacy-wiki-root', from));
+            mark('move', `${path.relative(dir, src)} -> ${path.relative(dir, archived)} (legacy wiki dir)`);
+          }
+          continue;
+        }
         else continue;
       } catch {
         continue;
@@ -314,6 +341,18 @@ function migrateKnowledgeLayerLinks(filePath) {
       .replace(/\]\(\.\.\/\.\.\/06-project-rules\.md\)/g, '](../../../06-project-rules.md)');
   }
 
+  if (after === before) return false;
+  write(filePath, after);
+  return true;
+}
+
+function migrateRawKnowledgeLinks(filePath) {
+  if (!fs.existsSync(filePath)) return false;
+  const before = safeRead(filePath);
+  if (!before) return false;
+  const after = before
+    .replace(/\]\(\.\.\/wiki\/sources\/README\.md\)/g, '](../wiki/knowledge/sources/README.md)')
+    .replace(/\]\(\.\.\/\.\.\/wiki\/sources\/README\.md\)/g, '](../../wiki/knowledge/sources/README.md)');
   if (after === before) return false;
   write(filePath, after);
   return true;
@@ -2574,6 +2613,17 @@ function run(dir, forceUpdate, action = 'update') {
     ];
     for (const fp of knowledgeLayerFiles) {
       if (migrateKnowledgeLayerLinks(fp)) mark('update', `${path.relative(dir, fp)} (wiki links)`);
+    }
+
+    const rawLinkFiles = [
+      path.join(memDir, 'raw/README.md'),
+      path.join(memDir, 'raw/files/README.md'),
+      path.join(memDir, 'raw/urls/README.md'),
+      path.join(memDir, 'raw/conversations/README.md'),
+      path.join(memDir, 'raw/docs/README.md'),
+    ];
+    for (const fp of rawLinkFiles) {
+      if (migrateRawKnowledgeLinks(fp)) mark('update', `${path.relative(dir, fp)} (raw links)`);
     }
 
     const legacyReferenceFiles = [
