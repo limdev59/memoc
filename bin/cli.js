@@ -3962,7 +3962,6 @@ function runInstallPlugin() {
   const skillLockPath = path.join(agentsDir, '.skill-lock.json');
   const skillsSrc    = path.join(pkgRoot, 'skills');
   const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
-  const piSkills     = path.join(piDir, 'skills');
   const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
   const piSettingsPath = path.join(piDir, 'settings.json');
 
@@ -3978,7 +3977,6 @@ function runInstallPlugin() {
       const src = path.join(skillsSrc, name);
       if (!fs.existsSync(src)) continue;
       copyDirSync(src, path.join(agentSkills, name));
-      copyDirSync(src, path.join(piSkills, name));
       const prev = skillLock.skills[name] || {};
       skillLock.skills[name] = {
         source:          'neneee0181/memoc',
@@ -3993,8 +3991,10 @@ function runInstallPlugin() {
     fs.mkdirSync(agentsDir, { recursive: true });
     fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
 
-    for (const name of DEPRECATED_SKILL_NAMES) {
-      const oldPiDest = path.join(piSkills, name);
+    // Pi Dev also reads ~/.agents/skills. Keep only the extension in ~/.pi/agent
+    // so startup does not report duplicate skill conflicts.
+    for (const name of [...SKILL_NAMES, ...DEPRECATED_SKILL_NAMES]) {
+      const oldPiDest = path.join(piDir, 'skills', name);
       if (fs.existsSync(oldPiDest)) fs.rmSync(oldPiDest, { recursive: true, force: true });
     }
     writePiMemocExtension(piExtension, SKILL_NAMES);
@@ -4008,7 +4008,7 @@ function runInstallPlugin() {
   console.log('  Claude Code    ~/.claude/plugins/cache/memoc/ + ~/.claude/plugins/marketplaces/memoc/');
   console.log('  Codex Desktop  ~/.agents/skills/');
   console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
-  console.log('  Pi Dev         ~/.pi/agent/skills/ + ~/.pi/agent/extensions/memoc.ts');
+  console.log('  Pi Dev         ~/.pi/agent/extensions/memoc.ts (uses ~/.agents/skills/)');
   console.log('\n  Skills:');
   for (const s of SKILL_NAMES) console.log(`    /${s}`);
   console.log('\n  Restart open agent apps to reload skills.\n');
