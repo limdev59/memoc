@@ -3813,6 +3813,38 @@ function readJsonLoose(fp) {
   } catch { return null; }
 }
 
+function writePiMemocExtension(dest, skillNames) {
+  const lines = [
+    'import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";',
+    '',
+    'const SKILLS: Array<[string, string]> = [',
+    ...skillNames.map((name) => {
+      const command = name;
+      return `  ["${command}", "${name}"],`;
+    }),
+    '];',
+    '',
+    'export default function memocPiExtension(pi: ExtensionAPI) {',
+    '  for (const [command, skillName] of SKILLS) {',
+    '    pi.registerCommand(command, {',
+    '      description: `Run ${skillName} skill`,',
+    '      handler: async (args, ctx) => {',
+    '        const message = args.trim() ? `/skill:${skillName} ${args.trim()}` : `/skill:${skillName}`;',
+    '        if (ctx.isIdle()) pi.sendUserMessage(message);',
+    '        else {',
+    '          pi.sendUserMessage(message, { deliverAs: "followUp" });',
+    '          ctx.ui.notify(`Queued ${skillName}`, "info");',
+    '        }',
+    '      },',
+    '    });',
+    '  }',
+    '}',
+    '',
+  ];
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.writeFileSync(dest, lines.join('\n'));
+}
+
 function runInstallPlugin() {
   const os = require('os');
   const PLUGIN_KEY = 'memoc@memoc';
@@ -3929,6 +3961,10 @@ function runInstallPlugin() {
   const agentSkills  = path.join(agentsDir, 'skills');
   const skillLockPath = path.join(agentsDir, '.skill-lock.json');
   const skillsSrc    = path.join(pkgRoot, 'skills');
+  const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+  const piSkills     = path.join(piDir, 'skills');
+  const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
+  const piSettingsPath = path.join(piDir, 'settings.json');
 
   if (fs.existsSync(skillsSrc)) {
     const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
@@ -3942,6 +3978,7 @@ function runInstallPlugin() {
       const src = path.join(skillsSrc, name);
       if (!fs.existsSync(src)) continue;
       copyDirSync(src, path.join(agentSkills, name));
+      copyDirSync(src, path.join(piSkills, name));
       const prev = skillLock.skills[name] || {};
       skillLock.skills[name] = {
         source:          'neneee0181/memoc',
@@ -3955,12 +3992,23 @@ function runInstallPlugin() {
     }
     fs.mkdirSync(agentsDir, { recursive: true });
     fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
+
+    for (const name of DEPRECATED_SKILL_NAMES) {
+      const oldPiDest = path.join(piSkills, name);
+      if (fs.existsSync(oldPiDest)) fs.rmSync(oldPiDest, { recursive: true, force: true });
+    }
+    writePiMemocExtension(piExtension, SKILL_NAMES);
+    const piSettings = readJsonLoose(piSettingsPath) || {};
+    piSettings.enableSkillCommands = true;
+    fs.mkdirSync(path.dirname(piSettingsPath), { recursive: true });
+    fs.writeFileSync(piSettingsPath, JSON.stringify(piSettings, null, 2) + '\n');
   }
 
   console.log('\n  memoc plugin installed\n');
   console.log('  Claude Code    ~/.claude/plugins/cache/memoc/ + ~/.claude/plugins/marketplaces/memoc/');
   console.log('  Codex Desktop  ~/.agents/skills/');
   console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
+  console.log('  Pi Dev         ~/.pi/agent/skills/ + ~/.pi/agent/extensions/memoc.ts');
   console.log('\n  Skills:');
   for (const s of SKILL_NAMES) console.log(`    /${s}`);
   console.log('\n  Restart open agent apps to reload skills.\n');
@@ -3997,10 +4045,15 @@ function runUninstallPlugin() {
   // remove from ~/.agents/skills/
   const agentsDir    = path.join(os.homedir(), '.agents');
   const skillLockPath = path.join(agentsDir, '.skill-lock.json');
+  const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+  const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
   for (const name of SKILL_NAMES) {
     const d = path.join(agentsDir, 'skills', name);
     if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+    const piSkillDir = path.join(piDir, 'skills', name);
+    if (fs.existsSync(piSkillDir)) fs.rmSync(piSkillDir, { recursive: true, force: true });
   }
+  if (fs.existsSync(piExtension)) fs.rmSync(piExtension, { force: true });
   const skillLock = readJsonLoose(skillLockPath);
   if (skillLock && skillLock.skills) {
     for (const name of SKILL_NAMES) delete skillLock.skills[name];
