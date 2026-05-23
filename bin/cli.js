@@ -3748,6 +3748,192 @@ function summaryPlaceholder(heading) {
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// INSTALL-PLUGIN — register memoc skills with agent apps
+// ═══════════════════════════════════════════════════════════════════
+
+function copyDirSync(src, dest) {
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src)) {
+    const s = path.join(src, entry);
+    const d = path.join(dest, entry);
+    if (fs.statSync(s).isDirectory()) copyDirSync(s, d);
+    else fs.copyFileSync(s, d);
+  }
+}
+
+function readJsonLoose(fp) {
+  try {
+    const raw = fs.readFileSync(fp, 'utf8');
+    try { return JSON.parse(raw); } catch (_) {}
+    let cleaned = '';
+    let inString = false;
+    let escaped = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      const next = raw[i + 1];
+      if (inString) {
+        cleaned += ch;
+        if (escaped) escaped = false;
+        else if (ch === '\\') escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') {
+        inString = true;
+        cleaned += ch;
+        continue;
+      }
+      if (ch === '/' && next === '/') {
+        while (i < raw.length && raw[i] !== '\n') i++;
+        cleaned += '\n';
+        continue;
+      }
+      cleaned += ch;
+    }
+    cleaned = cleaned.replace(/,(\s*[}\]])/g, '$1');
+    return JSON.parse(cleaned);
+  } catch { return null; }
+}
+
+function runInstallPlugin() {
+  const os = require('os');
+  const PLUGIN_KEY = 'memoc@memoc';
+
+  const pkgRoot    = path.join(__dirname, '..');
+  const pluginSrc  = path.join(pkgRoot, 'plugins', 'memoc');
+
+  if (!fs.existsSync(pluginSrc)) {
+    console.error('Error: plugin files not found in package.');
+    console.error('Ensure you are running from the installed memoc package or repo root.');
+    process.exit(1);
+  }
+
+  const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const cacheDir      = path.join(claudeDir, 'plugins', 'cache', 'memoc', 'memoc', VERSION);
+  const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+  const settingsPath  = path.join(claudeDir, 'settings.json');
+
+  // copy plugin files
+  copyDirSync(pluginSrc, cacheDir);
+
+  // update installed_plugins.json
+  const installed = readJsonLoose(installedPath) || {};
+  installed.version = installed.version || 2;
+  installed.plugins = installed.plugins || {};
+  const now = new Date().toISOString();
+  const existing = Array.isArray(installed.plugins[PLUGIN_KEY]) ? installed.plugins[PLUGIN_KEY][0] : null;
+  installed.plugins[PLUGIN_KEY] = [{
+    scope:       'user',
+    installPath: cacheDir,
+    version:     VERSION,
+    installedAt: existing ? existing.installedAt : now,
+    lastUpdated: now,
+  }];
+  fs.mkdirSync(path.dirname(installedPath), { recursive: true });
+  fs.writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
+
+  // update settings.json
+  const settings = readJsonLoose(settingsPath) || {};
+  settings.enabledPlugins = settings.enabledPlugins || {};
+  settings.enabledPlugins[PLUGIN_KEY] = true;
+  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+  try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
+  catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
+
+  const SKILL_NAMES = [
+    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-summary', 'memoc-compress',
+    'memoc-tokens', 'memoc-trim', 'memoc-work', 'memoc-note', 'memoc-activity',
+    'memoc-doctor', 'memoc-search', 'memoc-ingest', 'memoc-lint', 'memoc-actor',
+  ];
+
+  // Register global skills for Codex Desktop and other apps that read
+  // the common Skills location used by the skills CLI.
+  const agentsDir    = path.join(os.homedir(), '.agents');
+  const agentSkills  = path.join(agentsDir, 'skills');
+  const skillLockPath = path.join(agentsDir, '.skill-lock.json');
+  const skillsSrc    = path.join(pkgRoot, 'skills');
+
+  if (fs.existsSync(skillsSrc)) {
+    const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
+    if (!skillLock.skills) skillLock.skills = {};
+    for (const name of SKILL_NAMES) {
+      const src = path.join(skillsSrc, name);
+      if (!fs.existsSync(src)) continue;
+      copyDirSync(src, path.join(agentSkills, name));
+      const prev = skillLock.skills[name] || {};
+      skillLock.skills[name] = {
+        source:          'neneee0181/memoc',
+        sourceType:      'npm',
+        sourceUrl:       'https://github.com/neneee0181/memoc.git',
+        skillPath:       `skills/${name}/SKILL.md`,
+        skillFolderHash: VERSION,
+        installedAt:     prev.installedAt || now,
+        updatedAt:       now,
+      };
+    }
+    fs.mkdirSync(agentsDir, { recursive: true });
+    fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
+  }
+
+  console.log('\n  memoc plugin installed\n');
+  console.log('  Claude Code    ~/.claude/plugins/cache/memoc/');
+  console.log('  Codex Desktop  ~/.agents/skills/');
+  console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
+  console.log('\n  Skills:');
+  for (const s of SKILL_NAMES) console.log(`    /${s}`);
+  console.log('\n  Restart open agent apps to reload skills.\n');
+}
+
+function runUninstallPlugin() {
+  const os = require('os');
+  const PLUGIN_KEY = 'memoc@memoc';
+  const SKILL_NAMES = [
+    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-summary', 'memoc-compress',
+    'memoc-tokens', 'memoc-trim', 'memoc-work', 'memoc-note', 'memoc-activity',
+    'memoc-doctor', 'memoc-search', 'memoc-ingest', 'memoc-lint', 'memoc-actor',
+  ];
+
+  const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+  const cacheBase     = path.join(claudeDir, 'plugins', 'cache', 'memoc');
+  const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+  const settingsPath  = path.join(claudeDir, 'settings.json');
+
+  // remove Claude Code cache
+  if (fs.existsSync(cacheBase)) fs.rmSync(cacheBase, { recursive: true, force: true });
+
+  // remove from installed_plugins.json
+  const installed = readJsonLoose(installedPath);
+  if (installed && installed.plugins) {
+    delete installed.plugins[PLUGIN_KEY];
+    fs.writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
+  }
+
+  // remove from ~/.agents/skills/
+  const agentsDir    = path.join(os.homedir(), '.agents');
+  const skillLockPath = path.join(agentsDir, '.skill-lock.json');
+  for (const name of SKILL_NAMES) {
+    const d = path.join(agentsDir, 'skills', name);
+    if (fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+  }
+  const skillLock = readJsonLoose(skillLockPath);
+  if (skillLock && skillLock.skills) {
+    for (const name of SKILL_NAMES) delete skillLock.skills[name];
+    fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
+  }
+
+  // remove from settings.json
+  const settings = readJsonLoose(settingsPath);
+  if (settings && settings.enabledPlugins) {
+    delete settings.enabledPlugins[PLUGIN_KEY];
+    try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
+    catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
+  }
+
+  console.log('  memoc plugin removed from Claude Code and ~/.agents/skills/.');
+  console.log('  Restart Claude Code to deactivate.');
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // SUMMARY
 // ═══════════════════════════════════════════════════════════════════
 
@@ -3833,6 +4019,9 @@ if (!cmd || cmd === '--help' || cmd === '-h' || cmd === 'help') {
   console.log('  ingest <path|url>  Create a raw/source record scaffold for wiki synthesis');
   console.log('  note "<title>"     Save a durable topic/query-result scaffold');
   console.log('  lint-wiki          Check wiki links, tags, backlinks, and Related sections');
+  console.log('\nPlugin skills (Claude Code / Codex):');
+  console.log('  install-plugin     Register /memoc-* skills with Claude Code, Codex, and Skills agents');
+  console.log('  uninstall-plugin   Remove memoc plugin and global Skills entries');
   console.log('\nSearch flags:');
   console.log('  --files            Show file names and match counts, sorted by relevance + recency (default)');
   console.log('  --snippets         Show matching lines');
@@ -3859,7 +4048,9 @@ if (cmd === 'search')   { runSearch(cwd, 'memory');  process.exit(0); }
 if (cmd === 'grep')     { runSearch(cwd, 'project'); process.exit(0); }
 if (cmd === 'ingest')   { runIngest(cwd);     process.exit(0); }
 if (cmd === 'note')     { runNote(cwd);       process.exit(0); }
-if (cmd === 'lint-wiki') { runWikiLint(cwd);  process.exit(0); }
+if (cmd === 'lint-wiki')         { runWikiLint(cwd);       process.exit(0); }
+if (cmd === 'install-plugin')   { runInstallPlugin();     process.exit(0); }
+if (cmd === 'uninstall-plugin') { runUninstallPlugin();   process.exit(0); }
 
 console.error(`Unknown command: ${cmd}`);
 console.error('Run "memoc --help" for usage.');

@@ -1,0 +1,8 @@
+{
+  "name": "memoc",
+  "description": "Agent memory skills for memoc: scaffold, maintain, query, and compact markdown-based project memory.",
+  "author": {
+    "name": "kevin0181",
+    "url": "https://github.com/neneee0181"
+  }
+}

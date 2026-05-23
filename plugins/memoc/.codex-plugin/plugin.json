@@ -1,0 +1,27 @@
+{
+  "name": "memoc",
+  "version": "1.4.3",
+  "description": "Agent memory skills for memoc — scaffold, maintain, and query session-to-session AI memory.",
+  "author": {
+    "name": "kevin0181",
+    "url": "https://github.com/neneee0181"
+  },
+  "homepage": "https://github.com/neneee0181/memoc",
+  "repository": "https://github.com/neneee0181/memoc",
+  "license": "MIT",
+  "keywords": ["memory", "agent", "ai", "context", "scaffold"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "memoc",
+    "shortDescription": "Session-to-session memory for AI agents.",
+    "longDescription": "memoc scaffolds a structured memory system into any codebase so AI agents can pick up exactly where they left off. Skills cover init, upgrade, compress, search, work logs, notes, and health checks.",
+    "developerName": "kevin0181",
+    "category": "Productivity",
+    "capabilities": ["Write", "Read"],
+    "websiteURL": "https://github.com/neneee0181/memoc",
+    "privacyPolicyURL": "https://github.com/neneee0181/memoc/blob/main/README.md",
+    "termsOfServiceURL": "https://github.com/neneee0181/memoc/blob/main/LICENSE",
+    "defaultPrompt": ["Use memoc skills to manage agent memory."],
+    "brandColor": "#4F46E5"
+  }
+}

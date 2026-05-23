@@ -298,6 +298,56 @@ Node.js · Next.js · React · Vue · Svelte · Angular · Nuxt · Astro · Expr
 
 ---
 
+## Skills Plugin (Claude Code, Codex Desktop, and Skills-Compatible Agents)
+
+Install the memoc plugin once to get `/memoc-*` slash commands in Claude Code, Codex Desktop, and agents that read the common Skills location:
+
+```bash
+# Install memoc globally (if not already)
+npm install -g @kevin0181/memoc
+
+# Register the plugin and global skills (run once)
+memoc install-plugin
+
+# Then restart open agent apps
+```
+
+Or via npx (no global install needed):
+
+```bash
+npx @kevin0181/memoc install-plugin
+```
+
+To remove:
+
+```bash
+memoc uninstall-plugin
+```
+
+`install-plugin` writes the Claude Code plugin to `~/.claude/plugins/cache/memoc/`, enables `"memoc@memoc"` in `~/.claude/settings.json`, and installs global Skills entries under `~/.agents/skills/` for Codex Desktop and other skills-compatible agents. It is idempotent — safe to re-run after upgrading memoc.
+
+### Available skills
+
+| Skill | What it does |
+|-------|-------------|
+| `/memoc` | Show all skills and commands |
+| `/memoc-init` | Initialize memoc in the current project |
+| `/memoc-upgrade` | Upgrade memoc, preserve memory |
+| `/memoc-summary` | Print status/resume overview |
+| `/memoc-compress` | Compact memory files, refresh indexes |
+| `/memoc-tokens` | Estimate token cost of memory files |
+| `/memoc-trim` | Archive and compact oversized session-summary |
+| `/memoc-work` | Create actor worklog entry |
+| `/memoc-note` | Save durable topic/query-result scaffold |
+| `/memoc-activity` | List recent worklog entries |
+| `/memoc-doctor` | Check common memoc health issues |
+| `/memoc-search` | Search memory/agent docs |
+| `/memoc-ingest` | Create source record for wiki synthesis |
+| `/memoc-lint` | Check wiki links, tags, backlinks |
+| `/memoc-actor` | Show or set the local memoc actor |
+
+---
+
 ## License
 
 MIT
