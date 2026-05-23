@@ -338,6 +338,13 @@ memoc uninstall-plugin
 | `/memoc-note` | Save durable topic/query-result scaffold |
 | `/memoc-doctor` | Check common memoc health issues |
 | `/memoc-compress` | Compact memory files, refresh indexes |
+| `/memoc-code` | Apply Karpathy-inspired coding guardrails |
+| `/memoc-think` | Surface assumptions, ambiguity, and tradeoffs before coding |
+| `/memoc-simple` | Keep the implementation minimal and avoid overengineering |
+| `/memoc-scope` | Make surgical diffs without unrelated refactors |
+| `/memoc-goal` | Define success criteria and verify with tests/repros |
+
+The `/memoc-code` family is adapted from [`multica-ai/andrej-karpathy-skills`](https://github.com/multica-ai/andrej-karpathy-skills), MIT licensed, with short memoc names for coding workflows.
 
 ---
 

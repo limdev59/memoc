@@ -3843,6 +3843,7 @@ function runInstallPlugin() {
   const SKILL_NAMES = [
     'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
     'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
+    'memoc-code', 'memoc-think', 'memoc-simple', 'memoc-scope', 'memoc-goal',
   ];
   const DEPRECATED_SKILL_NAMES = [
     'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
@@ -3898,6 +3899,7 @@ function runUninstallPlugin() {
   const SKILL_NAMES = [
     'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
     'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
+    'memoc-code', 'memoc-think', 'memoc-simple', 'memoc-scope', 'memoc-goal',
     'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
     'memoc-ingest', 'memoc-lint', 'memoc-actor',
   ];
