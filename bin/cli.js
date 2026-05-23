@@ -3828,11 +3828,59 @@ function runInstallPlugin() {
 
   const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const cacheDir      = path.join(claudeDir, 'plugins', 'cache', 'memoc', 'memoc', VERSION);
+  const marketplaceDir = path.join(claudeDir, 'plugins', 'marketplaces', 'memoc');
+  const marketplacePluginDir = path.join(marketplaceDir, 'plugins', 'memoc');
+  const claudeMarketplacePath = path.join(marketplaceDir, '.claude-plugin', 'marketplace.json');
+  const agentsMarketplacePath = path.join(marketplaceDir, '.agents', 'plugins', 'marketplace.json');
   const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
   const settingsPath  = path.join(claudeDir, 'settings.json');
 
-  // copy plugin files
+  // copy plugin files to Claude's cache and local marketplace registry
   copyDirSync(pluginSrc, cacheDir);
+  copyDirSync(pluginSrc, marketplacePluginDir);
+  const claudeMarketplace = {
+    $schema: 'https://anthropic.com/claude-code/marketplace.schema.json',
+    name: 'memoc',
+    description: 'memoc skills and plugin installer for Claude Code, Codex, and skills-compatible coding agents.',
+    owner: {
+      name: 'kevin0181',
+    },
+    plugins: [{
+      name: 'memoc',
+      description: 'Session-to-session memory and coding guardrail skills for AI coding agents.',
+      author: {
+        name: 'kevin0181',
+      },
+      source: './plugins/memoc',
+      category: 'productivity',
+      homepage: 'https://github.com/neneee0181/memoc',
+    }],
+  };
+  const agentsMarketplace = {
+    name: 'memoc',
+    interface: {
+      displayName: 'memoc',
+    },
+    plugins: [{
+      name: 'memoc',
+      source: {
+        source: 'local',
+        path: './plugins/memoc',
+      },
+      policy: {
+        installation: 'AVAILABLE',
+        authentication: 'ON_INSTALL',
+      },
+      category: 'Productivity',
+    }],
+  };
+  for (const [marketplacePath, marketplace] of [
+    [claudeMarketplacePath, claudeMarketplace],
+    [agentsMarketplacePath, agentsMarketplace],
+  ]) {
+    fs.mkdirSync(path.dirname(marketplacePath), { recursive: true });
+    fs.writeFileSync(marketplacePath, JSON.stringify(marketplace, null, 2) + '\n');
+  }
 
   // update installed_plugins.json
   const installed = readJsonLoose(installedPath) || {};
@@ -3854,6 +3902,13 @@ function runInstallPlugin() {
   const settings = readJsonLoose(settingsPath) || {};
   settings.enabledPlugins = settings.enabledPlugins || {};
   settings.enabledPlugins[PLUGIN_KEY] = true;
+  settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
+  settings.extraKnownMarketplaces.memoc = {
+    source: {
+      source: 'directory',
+      path: marketplaceDir,
+    },
+  };
   fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
   try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
   catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
@@ -3903,7 +3958,7 @@ function runInstallPlugin() {
   }
 
   console.log('\n  memoc plugin installed\n');
-  console.log('  Claude Code    ~/.claude/plugins/cache/memoc/');
+  console.log('  Claude Code    ~/.claude/plugins/cache/memoc/ + ~/.claude/plugins/marketplaces/memoc/');
   console.log('  Codex Desktop  ~/.agents/skills/');
   console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
   console.log('\n  Skills:');
@@ -3924,11 +3979,13 @@ function runUninstallPlugin() {
 
   const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
   const cacheBase     = path.join(claudeDir, 'plugins', 'cache', 'memoc');
+  const marketplaceBase = path.join(claudeDir, 'plugins', 'marketplaces', 'memoc');
   const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
   const settingsPath  = path.join(claudeDir, 'settings.json');
 
   // remove Claude Code cache
   if (fs.existsSync(cacheBase)) fs.rmSync(cacheBase, { recursive: true, force: true });
+  if (fs.existsSync(marketplaceBase)) fs.rmSync(marketplaceBase, { recursive: true, force: true });
 
   // remove from installed_plugins.json
   const installed = readJsonLoose(installedPath);
@@ -3954,6 +4011,7 @@ function runUninstallPlugin() {
   const settings = readJsonLoose(settingsPath);
   if (settings && settings.enabledPlugins) {
     delete settings.enabledPlugins[PLUGIN_KEY];
+    if (settings.extraKnownMarketplaces) delete settings.extraKnownMarketplaces.memoc;
     try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
     catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
   }
