@@ -330,21 +330,14 @@ memoc uninstall-plugin
 
 | Skill | What it does |
 |-------|-------------|
-| `/memoc` | Show all skills and commands |
+| `/memoc` | Follow the full memoc memory operating protocol |
 | `/memoc-init` | Initialize memoc in the current project |
 | `/memoc-upgrade` | Upgrade memoc, preserve memory |
-| `/memoc-summary` | Print status/resume overview |
-| `/memoc-compress` | Compact memory files, refresh indexes |
-| `/memoc-tokens` | Estimate token cost of memory files |
-| `/memoc-trim` | Archive and compact oversized session-summary |
+| `/memoc-search` | Search memory/agent docs |
 | `/memoc-work` | Create actor worklog entry |
 | `/memoc-note` | Save durable topic/query-result scaffold |
-| `/memoc-activity` | List recent worklog entries |
 | `/memoc-doctor` | Check common memoc health issues |
-| `/memoc-search` | Search memory/agent docs |
-| `/memoc-ingest` | Create source record for wiki synthesis |
-| `/memoc-lint` | Check wiki links, tags, backlinks |
-| `/memoc-actor` | Show or set the local memoc actor |
+| `/memoc-compress` | Compact memory files, refresh indexes |
 
 ---
 

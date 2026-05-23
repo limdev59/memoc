@@ -1,29 +1,41 @@
 ---
 name: memoc
 description: >
-  Quick-reference card for all memoc skills and commands. Shows available skills,
-  their triggers, and what each does. One-shot display.
-  Trigger: /memoc, "memoc help", "what memoc commands", "memoc skills list".
+  Follow the full memoc operating protocol for a project: read memory first,
+  preserve durable context, use the project-local memoc runtime when available,
+  and record important work before handoff. Trigger: /memoc, "use memoc",
+  "follow memoc memory", "resume with memoc".
 ---
 
-## memoc skills
+Use this skill as the default operating mode for a repository that has, or should have, memoc memory.
 
-| Skill | Command | What it does |
-|-------|---------|-------------|
-| `/memoc-init` | `memoc init` | Scaffold agent memory in current project |
-| `/memoc-upgrade` | `memoc upgrade` | Upgrade memoc runtime, preserve memory |
-| `/memoc-summary` | `memoc summary` | Print status/resume overview |
-| `/memoc-compress` | `memoc compress` | Compact memory files, refresh indexes |
-| `/memoc-tokens` | `memoc tokens` | Estimate token cost of memory files |
-| `/memoc-trim` | `memoc trim-summary` | Archive and compact oversized session-summary |
-| `/memoc-work` | `memoc work "<title>"` | Create actor worklog entry |
-| `/memoc-note` | `memoc note "<title>"` | Save durable topic/query-result scaffold |
-| `/memoc-activity` | `memoc activity` | List recent worklog entries |
-| `/memoc-doctor` | `memoc doctor` | Check common memoc health issues |
-| `/memoc-search` | `memoc search "<query>"` | Search memory/agent docs |
-| `/memoc-ingest` | `memoc ingest <path\|url>` | Create raw/source record for wiki synthesis |
-| `/memoc-lint` | `memoc lint-wiki` | Check wiki links, tags, backlinks |
-| `/memoc-actor` | `memoc actor [set <name>]` | Show or set the local memoc actor |
+## Operating protocol
+
+1. Start by checking whether memoc is installed in the current project.
+   - Prefer `.memoc/` plus project-local launchers.
+   - If absent and the user wants memory set up, run `/memoc-init` or `memoc init`.
+
+2. Read memory before acting.
+   - First run `memoc summary` when available.
+   - Then open only the memory files that are relevant to the task, such as `.memoc/session-summary.md`, `.memoc/02-current-project-state.md`, `.memoc/04-handoff.md`, `.memoc/wiki/`, or worklog entries.
+
+3. Keep memory durable and concise.
+   - Record decisions, user preferences, active constraints, and handoff notes.
+   - Do not store transient command output, obvious code facts, secrets, credentials, or noisy chat history.
+   - Prefer wiki notes for reusable knowledge and worklog entries for session activity.
+
+4. Use the right memoc command when useful.
+   - `memoc search "<query>"` before broad filesystem search when looking for prior context.
+   - `memoc work "<title>"` after meaningful work so future agents know what changed.
+   - `memoc note "<title>"` for durable knowledge that should survive sessions.
+   - `memoc doctor` when memory looks stale, malformed, too large, or inconsistent.
+   - `memoc compress` when memory is noisy or oversized.
+   - `memoc upgrade` after updating memoc itself or when runtime/wrapper files are stale.
+
+5. Preserve user work.
+   - Treat memory files as collaborative project state.
+   - Do not overwrite user-authored notes unless the command is designed to preserve and merge them.
+   - Before final handoff, mention any memory updates made and any remaining health issues.
 
 ## Binary resolution (all skills use this order)
 
@@ -31,8 +43,12 @@ description: >
 2. macOS/Linux: `.memoc/bin/memoc`
 3. Fallback: `npx @kevin0181/memoc@latest`
 
-## Install
+## Related focused skills
 
-```bash
-npx @kevin0181/memoc init
-```
+- `/memoc-init` initializes memoc in the current project.
+- `/memoc-upgrade` refreshes runtime files while preserving memory.
+- `/memoc-search` searches memory and agent docs.
+- `/memoc-work` records session activity.
+- `/memoc-note` saves durable knowledge.
+- `/memoc-doctor` checks memory health.
+- `/memoc-compress` compacts noisy memory.

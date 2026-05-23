@@ -3841,9 +3841,12 @@ function runInstallPlugin() {
   catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
 
   const SKILL_NAMES = [
-    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-summary', 'memoc-compress',
-    'memoc-tokens', 'memoc-trim', 'memoc-work', 'memoc-note', 'memoc-activity',
-    'memoc-doctor', 'memoc-search', 'memoc-ingest', 'memoc-lint', 'memoc-actor',
+    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
+    'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
+  ];
+  const DEPRECATED_SKILL_NAMES = [
+    'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
+    'memoc-ingest', 'memoc-lint', 'memoc-actor',
   ];
 
   // Register global skills for Codex Desktop and other apps that read
@@ -3856,6 +3859,11 @@ function runInstallPlugin() {
   if (fs.existsSync(skillsSrc)) {
     const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
     if (!skillLock.skills) skillLock.skills = {};
+    for (const name of DEPRECATED_SKILL_NAMES) {
+      const oldDest = path.join(agentSkills, name);
+      if (fs.existsSync(oldDest)) fs.rmSync(oldDest, { recursive: true, force: true });
+      delete skillLock.skills[name];
+    }
     for (const name of SKILL_NAMES) {
       const src = path.join(skillsSrc, name);
       if (!fs.existsSync(src)) continue;
@@ -3888,9 +3896,10 @@ function runUninstallPlugin() {
   const os = require('os');
   const PLUGIN_KEY = 'memoc@memoc';
   const SKILL_NAMES = [
-    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-summary', 'memoc-compress',
-    'memoc-tokens', 'memoc-trim', 'memoc-work', 'memoc-note', 'memoc-activity',
-    'memoc-doctor', 'memoc-search', 'memoc-ingest', 'memoc-lint', 'memoc-actor',
+    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
+    'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
+    'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
+    'memoc-ingest', 'memoc-lint', 'memoc-actor',
   ];
 
   const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
