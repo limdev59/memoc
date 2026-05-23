@@ -714,12 +714,30 @@ function ensureRuntimeInstall(mark) {
     [path.join(sourceRoot, 'bin', 'cli.js'), path.join(runtimeDir, 'bin', 'cli.js')],
     [path.join(sourceRoot, 'package.json'), path.join(runtimeDir, 'package.json')],
   ];
+  const resourceDirs = [
+    [path.join(sourceRoot, 'plugins'), path.join(runtimeDir, 'plugins')],
+    [path.join(sourceRoot, 'skills'), path.join(runtimeDir, 'skills')],
+  ];
 
   for (const [src, dest] of files) {
     try {
       const content = fs.readFileSync(src, 'utf8');
       const changed = writeIfChanged(dest, content);
       mark(changed, `runtime ${path.relative(runtimeDir, dest)}`);
+    } catch {
+      mark('skip', `runtime ${path.basename(dest)} unavailable`);
+    }
+  }
+
+  for (const [src, dest] of resourceDirs) {
+    try {
+      if (!fs.existsSync(src)) {
+        mark('skip', `runtime ${path.basename(dest)} unavailable`);
+        continue;
+      }
+      fs.rmSync(dest, { recursive: true, force: true });
+      copyDirSync(src, dest);
+      mark(true, `runtime ${path.basename(dest)}`);
     } catch {
       mark('skip', `runtime ${path.basename(dest)} unavailable`);
     }
