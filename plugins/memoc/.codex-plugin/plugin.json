@@ -1,6 +1,6 @@
 {
   "name": "memoc",
-  "version": "1.4.12",
+  "version": "1.4.13",
   "description": "Agent memory skills for memoc — scaffold, maintain, and query session-to-session AI memory.",
   "author": {
     "name": "kevin0181",

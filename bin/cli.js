@@ -3845,6 +3845,18 @@ function writePiMemocExtension(dest, skillNames) {
   fs.writeFileSync(dest, lines.join('\n'));
 }
 
+function resolveSkillsSource(pkgRoot, pluginSrc, skillNames) {
+  const candidates = [
+    path.join(pkgRoot, 'skills'),
+    path.join(pluginSrc, 'skills'),
+  ];
+  for (const dir of candidates) {
+    if (!fs.existsSync(dir)) continue;
+    if (skillNames.every(name => fs.existsSync(path.join(dir, name, 'SKILL.md')))) return dir;
+  }
+  return null;
+}
+
 function runInstallPlugin() {
   const os = require('os');
   const PLUGIN_KEY = 'memoc@memoc';
@@ -3960,12 +3972,12 @@ function runInstallPlugin() {
   const agentsDir    = path.join(os.homedir(), '.agents');
   const agentSkills  = path.join(agentsDir, 'skills');
   const skillLockPath = path.join(agentsDir, '.skill-lock.json');
-  const skillsSrc    = path.join(pkgRoot, 'skills');
+  const skillsSrc    = resolveSkillsSource(pkgRoot, pluginSrc, SKILL_NAMES);
   const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
   const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
   const piSettingsPath = path.join(piDir, 'settings.json');
 
-  if (fs.existsSync(skillsSrc)) {
+  if (skillsSrc) {
     const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
     if (!skillLock.skills) skillLock.skills = {};
     for (const name of DEPRECATED_SKILL_NAMES) {
