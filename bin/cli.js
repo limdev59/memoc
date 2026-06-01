@@ -559,18 +559,40 @@ function tplMemocShWrapper() {
 
 function defaultUserBinDir() {
   if (process.env.MEMOC_USER_BIN_DIR) return process.env.MEMOC_USER_BIN_DIR;
+  let targetDir;
   if (currentPlatform() === 'win32') {
-    return path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'bin');
+    targetDir = path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'bin');
+  } else {
+    targetDir = path.join(process.env.HOME || process.cwd(), '.local', 'bin');
   }
-  return path.join(process.env.HOME || process.cwd(), '.local', 'bin');
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    const probe = path.join(targetDir, `.memoc-write-test-${process.pid}`);
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return targetDir;
+  } catch {
+    return path.join(process.cwd(), '.memoc', 'bin');
+  }
 }
 
 function defaultRuntimeDir() {
   if (process.env.MEMOC_RUNTIME_DIR) return process.env.MEMOC_RUNTIME_DIR;
+  let targetDir;
   if (currentPlatform() === 'win32') {
-    return path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'runtime');
+    targetDir = path.join(process.env.LOCALAPPDATA || path.join(process.env.USERPROFILE || process.cwd(), 'AppData', 'Local'), 'memoc', 'runtime');
+  } else {
+    targetDir = path.join(process.env.HOME || process.cwd(), '.local', 'share', 'memoc', 'runtime');
   }
-  return path.join(process.env.HOME || process.cwd(), '.local', 'share', 'memoc', 'runtime');
+  try {
+    fs.mkdirSync(targetDir, { recursive: true });
+    const probe = path.join(targetDir, `.memoc-write-test-${process.pid}`);
+    fs.writeFileSync(probe, '');
+    fs.unlinkSync(probe);
+    return targetDir;
+  } catch {
+    return path.join(process.cwd(), '.memoc', 'runtime');
+  }
 }
 
 function runtimeCliPath() {
@@ -3879,160 +3901,169 @@ function runInstallPlugin() {
     process.exit(1);
   }
 
-  const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
-  const cacheDir      = path.join(claudeDir, 'plugins', 'cache', 'memoc', 'memoc', VERSION);
-  const marketplaceDir = path.join(claudeDir, 'plugins', 'marketplaces', 'memoc');
-  const marketplacePluginDir = path.join(marketplaceDir, 'plugins', 'memoc');
-  const claudeMarketplacePath = path.join(marketplaceDir, '.claude-plugin', 'marketplace.json');
-  const agentsMarketplacePath = path.join(marketplaceDir, '.agents', 'plugins', 'marketplace.json');
-  const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
-  const settingsPath  = path.join(claudeDir, 'settings.json');
+  try {
+    const claudeDir     = process.env.CLAUDE_CONFIG_DIR || path.join(os.homedir(), '.claude');
+    const cacheDir      = path.join(claudeDir, 'plugins', 'cache', 'memoc', 'memoc', VERSION);
+    const marketplaceDir = path.join(claudeDir, 'plugins', 'marketplaces', 'memoc');
+    const marketplacePluginDir = path.join(marketplaceDir, 'plugins', 'memoc');
+    const claudeMarketplacePath = path.join(marketplaceDir, '.claude-plugin', 'marketplace.json');
+    const agentsMarketplacePath = path.join(marketplaceDir, '.agents', 'plugins', 'marketplace.json');
+    const installedPath = path.join(claudeDir, 'plugins', 'installed_plugins.json');
+    const settingsPath  = path.join(claudeDir, 'settings.json');
 
-  // copy plugin files to Claude's cache and local marketplace registry
-  copyDirSync(pluginSrc, cacheDir);
-  copyDirSync(pluginSrc, marketplacePluginDir);
-  const claudeMarketplace = {
-    $schema: 'https://anthropic.com/claude-code/marketplace.schema.json',
-    name: 'memoc',
-    description: 'memoc skills and plugin installer for Claude Code, Codex, and skills-compatible coding agents.',
-    owner: {
-      name: 'kevin0181',
-    },
-    plugins: [{
+    // copy plugin files to Claude's cache and local marketplace registry
+    copyDirSync(pluginSrc, cacheDir);
+    copyDirSync(pluginSrc, marketplacePluginDir);
+    const claudeMarketplace = {
+      $schema: 'https://anthropic.com/claude-code/marketplace.schema.json',
       name: 'memoc',
-      description: 'Session-to-session memory and coding guardrail skills for AI coding agents.',
-      author: {
+      description: 'memoc skills and plugin installer for Claude Code, Codex, and skills-compatible coding agents.',
+      owner: {
         name: 'kevin0181',
       },
-      source: './plugins/memoc',
-      category: 'productivity',
-      homepage: 'https://github.com/neneee0181/memoc',
-    }],
-  };
-  const agentsMarketplace = {
-    name: 'memoc',
-    interface: {
-      displayName: 'memoc',
-    },
-    plugins: [{
+      plugins: [{
+        name: 'memoc',
+        description: 'Session-to-session memory and coding guardrail skills for AI coding agents.',
+        author: {
+          name: 'kevin0181',
+        },
+        source: './plugins/memoc',
+        category: 'productivity',
+        homepage: 'https://github.com/neneee0181/memoc',
+      }],
+    };
+    const agentsMarketplace = {
       name: 'memoc',
+      interface: {
+        displayName: 'memoc',
+      },
+      plugins: [{
+        name: 'memoc',
+        source: {
+          source: 'local',
+          path: './plugins/memoc',
+        },
+        policy: {
+          installation: 'AVAILABLE',
+          authentication: 'ON_INSTALL',
+        },
+        category: 'Productivity',
+      }],
+    };
+    for (const [marketplacePath, marketplace] of [
+      [claudeMarketplacePath, claudeMarketplace],
+      [agentsMarketplacePath, agentsMarketplace],
+    ]) {
+      fs.mkdirSync(path.dirname(marketplacePath), { recursive: true });
+      fs.writeFileSync(marketplacePath, JSON.stringify(marketplace, null, 2) + '\n');
+    }
+
+    // update installed_plugins.json
+    const installed = readJsonLoose(installedPath) || {};
+    installed.version = installed.version || 2;
+    installed.plugins = installed.plugins || {};
+    const now = new Date().toISOString();
+    const existing = Array.isArray(installed.plugins[PLUGIN_KEY]) ? installed.plugins[PLUGIN_KEY][0] : null;
+    installed.plugins[PLUGIN_KEY] = [{
+      scope:       'user',
+      installPath: cacheDir,
+      version:     VERSION,
+      installedAt: existing ? existing.installedAt : now,
+      lastUpdated: now,
+    }];
+    fs.mkdirSync(path.dirname(installedPath), { recursive: true });
+    fs.writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
+
+    // update settings.json
+    const settings = readJsonLoose(settingsPath) || {};
+    settings.enabledPlugins = settings.enabledPlugins || {};
+    settings.enabledPlugins[PLUGIN_KEY] = true;
+    settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
+    settings.extraKnownMarketplaces.memoc = {
       source: {
-        source: 'local',
-        path: './plugins/memoc',
+        source: 'directory',
+        path: marketplaceDir,
       },
-      policy: {
-        installation: 'AVAILABLE',
-        authentication: 'ON_INSTALL',
-      },
-      category: 'Productivity',
-    }],
-  };
-  for (const [marketplacePath, marketplace] of [
-    [claudeMarketplacePath, claudeMarketplace],
-    [agentsMarketplacePath, agentsMarketplace],
-  ]) {
-    fs.mkdirSync(path.dirname(marketplacePath), { recursive: true });
-    fs.writeFileSync(marketplacePath, JSON.stringify(marketplace, null, 2) + '\n');
+    };
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
+    catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
+
+    const SKILL_NAMES = [
+      'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
+      'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
+      'memoc-code', 'memoc-think', 'memoc-simple', 'memoc-scope', 'memoc-goal',
+    ];
+    const DEPRECATED_SKILL_NAMES = [
+      'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
+      'memoc-ingest', 'memoc-lint', 'memoc-actor',
+    ];
+
+    // Register global skills for Codex Desktop and other apps that read
+    // the common Skills location used by the skills CLI.
+    const agentsDir    = path.join(os.homedir(), '.agents');
+    const agentSkills  = path.join(agentsDir, 'skills');
+    const skillLockPath = path.join(agentsDir, '.skill-lock.json');
+    const skillsSrc    = resolveSkillsSource(pkgRoot, pluginSrc, SKILL_NAMES);
+    const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
+    const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
+    const piSettingsPath = path.join(piDir, 'settings.json');
+
+    if (skillsSrc) {
+      const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
+      if (!skillLock.skills) skillLock.skills = {};
+      for (const name of DEPRECATED_SKILL_NAMES) {
+        const oldDest = path.join(agentSkills, name);
+        if (fs.existsSync(oldDest)) fs.rmSync(oldDest, { recursive: true, force: true });
+        delete skillLock.skills[name];
+      }
+      for (const name of SKILL_NAMES) {
+        const src = path.join(skillsSrc, name);
+        if (!fs.existsSync(src)) continue;
+        copyDirSync(src, path.join(agentSkills, name));
+        const prev = skillLock.skills[name] || {};
+        skillLock.skills[name] = {
+          source:          'neneee0181/memoc',
+          sourceType:      'npm',
+          sourceUrl:       'https://github.com/neneee0181/memoc.git',
+          skillPath:       `skills/${name}/SKILL.md`,
+          skillFolderHash: VERSION,
+          installedAt:     prev.installedAt || now,
+          updatedAt:       now,
+        };
+      }
+      fs.mkdirSync(agentsDir, { recursive: true });
+      fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
+
+      // Pi Dev also reads ~/.agents/skills. Keep only the extension in ~/.pi/agent
+      // so startup does not report duplicate skill conflicts.
+      for (const name of [...SKILL_NAMES, ...DEPRECATED_SKILL_NAMES]) {
+        const oldPiDest = path.join(piDir, 'skills', name);
+        if (fs.existsSync(oldPiDest)) fs.rmSync(oldPiDest, { recursive: true, force: true });
+      }
+      writePiMemocExtension(piExtension, SKILL_NAMES);
+      const piSettings = readJsonLoose(piSettingsPath) || {};
+      piSettings.enableSkillCommands = true;
+      fs.mkdirSync(path.dirname(piSettingsPath), { recursive: true });
+      fs.writeFileSync(piSettingsPath, JSON.stringify(piSettings, null, 2) + '\n');
+    }
+
+    console.log('\n  memoc plugin installed\n');
+    console.log('  Claude Code    ~/.claude/plugins/cache/memoc/ + ~/.claude/plugins/marketplaces/memoc/');
+    console.log('  Codex Desktop  ~/.agents/skills/');
+    console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
+    console.log('  Pi Dev         ~/.pi/agent/extensions/memoc.ts (uses ~/.agents/skills/)');
+    console.log('\n  Skills:');
+    for (const s of SKILL_NAMES) console.log(`    /${s}`);
+    console.log('\n  Restart open agent apps to reload skills.\n');
+  } catch (err) {
+    console.warn('\n  Warning: Failed to install global plugin in home directory.');
+    console.warn('  This is common in sandboxed environments such as Codex or workspace-write.');
+    console.warn('  To install custom configuration or plugins, try setting the CLAUDE_CONFIG_DIR environment variable:');
+    console.warn('    PowerShell: $env:CLAUDE_CONFIG_DIR = "./.claude"');
+    console.warn('    Bash/sh:    export CLAUDE_CONFIG_DIR="./.claude"');
+    console.warn('  Then re-run: memoc install-plugin\n');
   }
-
-  // update installed_plugins.json
-  const installed = readJsonLoose(installedPath) || {};
-  installed.version = installed.version || 2;
-  installed.plugins = installed.plugins || {};
-  const now = new Date().toISOString();
-  const existing = Array.isArray(installed.plugins[PLUGIN_KEY]) ? installed.plugins[PLUGIN_KEY][0] : null;
-  installed.plugins[PLUGIN_KEY] = [{
-    scope:       'user',
-    installPath: cacheDir,
-    version:     VERSION,
-    installedAt: existing ? existing.installedAt : now,
-    lastUpdated: now,
-  }];
-  fs.mkdirSync(path.dirname(installedPath), { recursive: true });
-  fs.writeFileSync(installedPath, JSON.stringify(installed, null, 2) + '\n');
-
-  // update settings.json
-  const settings = readJsonLoose(settingsPath) || {};
-  settings.enabledPlugins = settings.enabledPlugins || {};
-  settings.enabledPlugins[PLUGIN_KEY] = true;
-  settings.extraKnownMarketplaces = settings.extraKnownMarketplaces || {};
-  settings.extraKnownMarketplaces.memoc = {
-    source: {
-      source: 'directory',
-      path: marketplaceDir,
-    },
-  };
-  fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
-  try { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600 }); }
-  catch { fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n'); }
-
-  const SKILL_NAMES = [
-    'memoc', 'memoc-init', 'memoc-upgrade', 'memoc-search',
-    'memoc-work', 'memoc-note', 'memoc-doctor', 'memoc-compress',
-    'memoc-code', 'memoc-think', 'memoc-simple', 'memoc-scope', 'memoc-goal',
-  ];
-  const DEPRECATED_SKILL_NAMES = [
-    'memoc-summary', 'memoc-tokens', 'memoc-trim', 'memoc-activity',
-    'memoc-ingest', 'memoc-lint', 'memoc-actor',
-  ];
-
-  // Register global skills for Codex Desktop and other apps that read
-  // the common Skills location used by the skills CLI.
-  const agentsDir    = path.join(os.homedir(), '.agents');
-  const agentSkills  = path.join(agentsDir, 'skills');
-  const skillLockPath = path.join(agentsDir, '.skill-lock.json');
-  const skillsSrc    = resolveSkillsSource(pkgRoot, pluginSrc, SKILL_NAMES);
-  const piDir        = process.env.PI_CODING_AGENT_DIR || path.join(os.homedir(), '.pi', 'agent');
-  const piExtension  = path.join(piDir, 'extensions', 'memoc.ts');
-  const piSettingsPath = path.join(piDir, 'settings.json');
-
-  if (skillsSrc) {
-    const skillLock = readJsonLoose(skillLockPath) || { version: 3, skills: {} };
-    if (!skillLock.skills) skillLock.skills = {};
-    for (const name of DEPRECATED_SKILL_NAMES) {
-      const oldDest = path.join(agentSkills, name);
-      if (fs.existsSync(oldDest)) fs.rmSync(oldDest, { recursive: true, force: true });
-      delete skillLock.skills[name];
-    }
-    for (const name of SKILL_NAMES) {
-      const src = path.join(skillsSrc, name);
-      if (!fs.existsSync(src)) continue;
-      copyDirSync(src, path.join(agentSkills, name));
-      const prev = skillLock.skills[name] || {};
-      skillLock.skills[name] = {
-        source:          'neneee0181/memoc',
-        sourceType:      'npm',
-        sourceUrl:       'https://github.com/neneee0181/memoc.git',
-        skillPath:       `skills/${name}/SKILL.md`,
-        skillFolderHash: VERSION,
-        installedAt:     prev.installedAt || now,
-        updatedAt:       now,
-      };
-    }
-    fs.mkdirSync(agentsDir, { recursive: true });
-    fs.writeFileSync(skillLockPath, JSON.stringify(skillLock, null, 2) + '\n');
-
-    // Pi Dev also reads ~/.agents/skills. Keep only the extension in ~/.pi/agent
-    // so startup does not report duplicate skill conflicts.
-    for (const name of [...SKILL_NAMES, ...DEPRECATED_SKILL_NAMES]) {
-      const oldPiDest = path.join(piDir, 'skills', name);
-      if (fs.existsSync(oldPiDest)) fs.rmSync(oldPiDest, { recursive: true, force: true });
-    }
-    writePiMemocExtension(piExtension, SKILL_NAMES);
-    const piSettings = readJsonLoose(piSettingsPath) || {};
-    piSettings.enableSkillCommands = true;
-    fs.mkdirSync(path.dirname(piSettingsPath), { recursive: true });
-    fs.writeFileSync(piSettingsPath, JSON.stringify(piSettings, null, 2) + '\n');
-  }
-
-  console.log('\n  memoc plugin installed\n');
-  console.log('  Claude Code    ~/.claude/plugins/cache/memoc/ + ~/.claude/plugins/marketplaces/memoc/');
-  console.log('  Codex Desktop  ~/.agents/skills/');
-  console.log('  Skills spec    ~/.agents/skills/ (Cursor, Windsurf, and other supported agents)');
-  console.log('  Pi Dev         ~/.pi/agent/extensions/memoc.ts (uses ~/.agents/skills/)');
-  console.log('\n  Skills:');
-  for (const s of SKILL_NAMES) console.log(`    /${s}`);
-  console.log('\n  Restart open agent apps to reload skills.\n');
 }
 
 function runUninstallPlugin() {
