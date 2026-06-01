@@ -496,7 +496,9 @@ function tplMemocCmdWrapper() {
     '@echo off',
     'set "MEMOC_RUNTIME=%MEMOC_RUNTIME_DIR%"',
     'if "%MEMOC_RUNTIME%"=="" (',
-    '  if not "%LOCALAPPDATA%"=="" (',
+    '  if exist "%~dp0..\\runtime\\bin\\cli.js" (',
+    '    set "MEMOC_RUNTIME=%~dp0..\\runtime"',
+    '  ) else if not "%LOCALAPPDATA%"=="" (',
     '    set "MEMOC_RUNTIME=%LOCALAPPDATA%\\memoc\\runtime"',
     '  ) else (',
     '    set "MEMOC_RUNTIME=%USERPROFILE%\\AppData\\Local\\memoc\\runtime"',
@@ -504,9 +506,9 @@ function tplMemocCmdWrapper() {
     ')',
     'set "MEMOC_CLI=%MEMOC_RUNTIME%\\bin\\cli.js"',
     'if exist "%MEMOC_CLI%" (',
-    '  node "%MEMOC_CLI%" %*',
+    '  call node "%MEMOC_CLI%" %*',
     ') else (',
-    '  npx @kevin0181/memoc@latest %*',
+    '  call npx @kevin0181/memoc@latest %*',
     ')',
     'exit /b %ERRORLEVEL%',
     '',
@@ -517,7 +519,9 @@ function tplMemocPs1Wrapper() {
   return [
     '$runtime = $env:MEMOC_RUNTIME_DIR',
     'if (-not $runtime) {',
-    '  if ($env:LOCALAPPDATA) { $runtime = Join-Path $env:LOCALAPPDATA "memoc\\runtime" }',
+    '  $localRuntime = Join-Path $PSScriptRoot "..\\runtime"',
+    '  if (Test-Path (Join-Path $localRuntime "bin\\cli.js")) { $runtime = $localRuntime }',
+    '  elseif ($env:LOCALAPPDATA) { $runtime = Join-Path $env:LOCALAPPDATA "memoc\\runtime" }',
     '  else { $runtime = Join-Path $env:USERPROFILE "AppData\\Local\\memoc\\runtime" }',
     '}',
     '$cli = Join-Path $runtime "bin\\cli.js"',
@@ -537,7 +541,12 @@ function tplMemocShWrapper() {
     'if [ -n "$MEMOC_RUNTIME_DIR" ]; then',
     '  memoc_runtime="$MEMOC_RUNTIME_DIR"',
     'else',
-    '  memoc_runtime="${HOME:-$PWD}/.local/share/memoc/runtime"',
+    '  memoc_local="$(dirname "$0")/../runtime"',
+    '  if [ -f "$memoc_local/bin/cli.js" ]; then',
+    '    memoc_runtime="$memoc_local"',
+    '  else',
+    '    memoc_runtime="${HOME:-$PWD}/.local/share/memoc/runtime"',
+    '  fi',
     'fi',
     'memoc_cli="$memoc_runtime/bin/cli.js"',
     'if [ -f "$memoc_cli" ]; then',
@@ -1858,7 +1867,7 @@ memoc note "Durable topic or query result"
 memoc lint-wiki
 \`\`\`
 
-If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh for the rest of the session. If the local wrapper is missing, use \`npx @kevin0181/memoc <command>\` or re-run init.
+If \`memoc\` is not on PATH, use \`.\\.memoc\\bin\\memoc.cmd <command>\` on Windows or \`.memoc/bin/memoc <command>\` in sh for the rest of the session (project-local \`.memoc/runtime\` is preferred when present, useful for sandboxed agents). If the local wrapper is missing, use \`npx @kevin0181/memoc <command>\` or re-run init.
 
 ## Agent Read Order
 

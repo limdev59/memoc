@@ -73,6 +73,11 @@ test('init creates PATH helpers and teaches agents command fallbacks', () => {
     assert.match(cmdWrapper, /%LOCALAPPDATA%\\memoc\\runtime/);
     assert.match(ps1Wrapper, /\$env:LOCALAPPDATA/);
     assert.match(shWrapper, /\$\{HOME:-\$PWD\}\/\.local\/share\/memoc\/runtime/);
+    assert.match(cmdWrapper, /%~dp0\.\.\\runtime/);
+    assert.match(cmdWrapper, /call node "%MEMOC_CLI%" %\*/);
+    assert.match(cmdWrapper, /call npx @kevin0181\/memoc@latest %\*/);
+    assert.match(ps1Wrapper, /Join-Path \$PSScriptRoot "\.\.\\runtime"/);
+    assert.match(shWrapper, /\$\(dirname "\$0"\)\/\.\.\/runtime/);
     assert.doesNotMatch(cmdWrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
     assert.doesNotMatch(ps1Wrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
     assert.doesNotMatch(shWrapper, /fake-runtime|C:\\Users\\kevin|\/Users\/neneee/);
