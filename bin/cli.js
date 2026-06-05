@@ -3363,10 +3363,19 @@ function runSearch(dir, scope = 'memory') {
   const query = queryParts.join(' ').toLowerCase();
 
   const searchRoots = scope === 'project' ? [dir] : memorySearchRoots(dir);
+  const deadline = searchDeadline(scope, opts);
+  const searchState = { timedOut: false };
 
   if (!query) {
     // No query — list searchable files sorted by recency
     const allFiles = [];
+    function shouldStopListing() {
+      if (opts.all || scope !== 'memory') return false;
+      if (!searchDeadlineReached(deadline)) return false;
+      if (allFiles.length < opts.limit) return false;
+      searchState.timedOut = true;
+      return true;
+    }
     function collectFile(fp) {
       if (!fs.existsSync(fp)) return;
       const rel = path.relative(dir, fp);
@@ -3376,7 +3385,8 @@ function runSearch(dir, scope = 'memory') {
     }
     function collectDir(d) {
       if (!fs.existsSync(d)) return;
-      for (const entry of fs.readdirSync(d)) {
+      for (const entry of orderedSearchEntries(dir, d, scope)) {
+        if (shouldStopListing()) return;
         const fp = path.join(d, entry);
         try {
           const st = fs.statSync(fp);
@@ -3387,6 +3397,7 @@ function runSearch(dir, scope = 'memory') {
       }
     }
     for (const root of searchRoots) {
+      if (shouldStopListing()) break;
       try {
         if (fs.statSync(root).isDirectory()) collectDir(root);
         else collectFile(root);
@@ -3398,10 +3409,17 @@ function runSearch(dir, scope = 'memory') {
     if (!opts.all && allFiles.length > limited.length) {
       console.log(`... ${allFiles.length - limited.length} more files. Use --all to show all.`);
     }
+    if (searchState.timedOut) console.log(searchTimeoutMessage(scope));
     return;
   }
 
   const matchesByFile = new Map(); // rel -> { matches: [], mtime: number }
+  function shouldStopSearch() {
+    if (opts.all || scope !== 'memory') return false;
+    if (!searchDeadlineReached(deadline)) return false;
+    searchState.timedOut = true;
+    return true;
+  }
 
   function searchFile(fp) {
     if (!fs.existsSync(fp)) return;
@@ -3423,7 +3441,8 @@ function runSearch(dir, scope = 'memory') {
 
   function walkDir(d) {
     if (!fs.existsSync(d)) return;
-    for (const entry of fs.readdirSync(d)) {
+    for (const entry of orderedSearchEntries(dir, d, scope)) {
+      if (shouldStopSearch()) return;
       const fp = path.join(d, entry);
       try {
         const st = fs.statSync(fp);
@@ -3435,6 +3454,7 @@ function runSearch(dir, scope = 'memory') {
   }
 
   for (const root of searchRoots) {
+    if (shouldStopSearch()) break;
     try {
       if (fs.statSync(root).isDirectory()) walkDir(root);
       else searchFile(root);
@@ -3473,17 +3493,55 @@ function runSearch(dir, scope = 'memory') {
       console.log(`... ${snippets.length - limited.length} more matches. Use --all to show all, or --limit N.`);
     }
   }
+  if (searchState.timedOut) console.log(searchTimeoutMessage(scope));
 }
 
 function memorySearchRoots(dir) {
   return [
-    path.join(dir, '.memoc'),
-    path.join(dir, 'skills'),
-    path.join(dir, 'llms.txt'),
     path.join(dir, 'AGENTS.md'),
     path.join(dir, 'CLAUDE.md'),
+    path.join(dir, 'llms.txt'),
+    path.join(dir, '.memoc', 'session-summary.md'),
+    path.join(dir, '.memoc', '02-current-project-state.md'),
+    path.join(dir, '.memoc', '04-handoff.md'),
+    path.join(dir, '.memoc', '06-project-rules.md'),
+    path.join(dir, '.memoc', '03-decisions.md'),
+    path.join(dir, '.memoc', 'activity.md'),
+    path.join(dir, '.memoc', '00-project-brief.md'),
+    path.join(dir, '.memoc', '00-agent-index.md'),
+    path.join(dir, '.memoc', 'wiki'),
+    path.join(dir, 'skills'),
+    path.join(dir, '.memoc', 'actors'),
+    path.join(dir, '.memoc', 'worklog'),
     ...Object.values(AGENT_REGISTRY).map(agent => path.join(dir, agent.file)),
   ];
+}
+
+function searchDeadline(scope, opts) {
+  if (opts.all || scope !== 'memory') return Infinity;
+  const raw = process.env.MEMOC_SEARCH_TIMEOUT_MS;
+  const ms = raw == null || raw === '' ? 1500 : Number(raw);
+  if (!Number.isFinite(ms) || ms < 0) return Date.now() + 1500;
+  return Date.now() + ms;
+}
+
+function searchDeadlineReached(deadline) {
+  return Number.isFinite(deadline) && Date.now() >= deadline;
+}
+
+function orderedSearchEntries(rootDir, currentDir, scope = 'memory') {
+  const entries = fs.readdirSync(currentDir);
+  if (scope !== 'memory') return entries.sort((a, b) => a.localeCompare(b));
+  return entries.sort((a, b) => {
+    const relA = path.relative(rootDir, path.join(currentDir, a));
+    const relB = path.relative(rootDir, path.join(currentDir, b));
+    return searchPriority(relA, scope) - searchPriority(relB, scope) || a.localeCompare(b);
+  });
+}
+
+function searchTimeoutMessage(scope = 'memory') {
+  if (scope !== 'memory') return '';
+  return 'Search stopped early after scanning higher-priority memory files. Refine the query or use --all for a deeper scan.';
 }
 
 function shouldSkipSearchDir(name, scope = 'memory') {
@@ -3555,6 +3613,8 @@ function searchPriority(file, scope = 'memory') {
   if (normalized.startsWith('.memoc/wiki/knowledge/')) return 30;
   if (normalized.startsWith('.memoc/wiki/')) return 35;
   if (normalized.startsWith('skills/')) return 40;
+  if (normalized.startsWith('.memoc/actors/')) return 60;
+  if (normalized.startsWith('.memoc/worklog/')) return 70;
   return 50;
 }
 
