@@ -622,6 +622,37 @@ test('memory search skips raw ingested material but finds source summaries', () 
   });
 });
 
+test('memory search stops early on low-priority worklog scans instead of hanging', () => {
+  withTempProject(dir => {
+    const env = {
+      ...process.env,
+      MEMOC_SKIP_PATH_REGISTER: '1',
+      MEMOC_USER_BIN_DIR: path.join(dir, 'fake-user-bin'),
+      MEMOC_RUNTIME_DIR: path.join(dir, 'fake-runtime'),
+      MEMOC_SEARCH_TIMEOUT_MS: '1',
+    };
+    execFileSync(process.execPath, [cliPath, 'init'], { cwd: dir, encoding: 'utf8', env });
+
+    const worklogDir = path.join(dir, '.memoc', 'worklog', 'tester', '2026-06');
+    fs.mkdirSync(worklogDir, { recursive: true });
+    for (let i = 0; i < 400; i++) {
+      fs.writeFileSync(
+        path.join(worklogDir, `20260605T2100-${String(i).padStart(4, '0')}.md`),
+        `# Worklog ${i}\n\nneedle-only-in-worklog\n${'x'.repeat(4000)}\n`,
+        'utf8'
+      );
+    }
+
+    const output = execFileSync(process.execPath, [cliPath, 'search', 'needle-only-in-worklog', '--snippets', '--limit', '5'], {
+      cwd: dir,
+      encoding: 'utf8',
+      env,
+    });
+
+    assert.match(output, /Search stopped early after scanning higher-priority memory files/);
+  });
+});
+
 test('trim-summary archives oversized startup summary and rewrites compact snapshot', () => {
   withTempProject(dir => {
     const env = {
